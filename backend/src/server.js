@@ -1,10 +1,36 @@
-import dotenv from 'dotenv';
-import { app } from './app.js';
+import express from "express";
+import cors from "cors";
 
-dotenv.config();
+// Routes (example - adjust paths to your project)
+import authRoutes from "./routes/auth.js";
 
-const port = process.env.PORT || 5000;
+export const app = express();
 
-app.listen(port, () => {
-  console.log(`API Fourati rideaux lancée sur le port ${port}`);
+/* =======================
+   CORS CONFIG (IMPORTANT)
+======================= */
+app.use(cors({
+  origin: "https://fouratilog.netlify.app",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
+}));
+
+// Handle preflight requests
+app.options("*", cors());
+
+/* =======================
+   MIDDLEWARES
+======================= */
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+/* =======================
+   ROUTES
+======================= */
+app.use("/auth", authRoutes);
+
+// test route
+app.get("/", (req, res) => {
+  res.json({ message: "API is running 🚀" });
 });
