@@ -1,6 +1,12 @@
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const frontendDist = resolve(__dirname, '../../frontend/dist');
 import { authRoutes } from './routes/authRoutes.js';
 import { colorRoutes } from './routes/colorRoutes.js';
 import { commercialRoutes } from './routes/commercialRoutes.js';
@@ -35,6 +41,9 @@ app.options('*', cors());
 
 app.use(express.json({ limit: '1mb' }));
 
+// Serve frontend static files from sibling directory
+app.use(express.static(frontendDist));
+
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 app.use('/api/auth', authRoutes);
 app.use('/api/references', referenceRoutes);
@@ -53,6 +62,11 @@ app.use('/api/article', publicReferenceRoutes);
 
 app.use('/api/design', publicDesignRoutes);
 
+
+// SPA fallback: serve index.html for any non-API route (client-side routing)
+app.get(/^\/(?!api\/).*/, (req, res) => {
+  res.sendFile(resolve(frontendDist, 'index.html'));
+});
 
 app.use(notFound);
 app.use(errorHandler);
