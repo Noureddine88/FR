@@ -25,13 +25,13 @@ export const app = express();
 app.use(securityHeaders);
 app.use(rateLimit());
 
-const frontendOrigin = process.env.FRONTEND_URL;
-app.use(
-  cors({
-    origin: frontendOrigin ? frontendOrigin : false,
-    credentials: true,
-  }),
-);
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'https://fouratilog.netlify.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
+app.options('*', cors());
 
 app.use(express.json({ limit: '1mb' }));
 
