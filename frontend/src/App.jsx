@@ -134,7 +134,7 @@ function ArticleLookup({ displayValue, onSelect, onClear, placeholder = 'Code ar
 
     const t = setTimeout(async () => {
       try {
-        const response = await api.get(`/rolls/search?q=${encodeURIComponent(q)}`);
+        const response = await api.get(`/api/rolls/search?q=${encodeURIComponent(q)}`);
         if (queryTokenRef.current !== token) return;
         setSuggestions(response.data || []);
       } catch (err) {
@@ -806,7 +806,7 @@ function Rolls() {
   const { data: suppliers } = useFetch('/suppliers');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const rollsPath = searchQuery ? `/rolls?search=${encodeURIComponent(searchQuery)}` : '/rolls';
+  const rollsPath = searchQuery ? `/api/rolls?search=${encodeURIComponent(searchQuery)}` : '/rolls';
   const { data, reload } = useFetch(rollsPath, [searchQuery]);
   const [form, setForm] = useState({});
   const [editing, setEditing] = useState(null);
@@ -849,7 +849,7 @@ function Rolls() {
         sellingPrice: toNumber(form.sellingPrice),
       };
       if (editing) {
-        await api.put(`/rolls/${editing}`, payload);
+        await api.put(`/api/rolls/${editing}`, payload);
       } else {
         await api.post('/rolls', payload);
       }
@@ -863,7 +863,7 @@ function Rolls() {
   const remove = async (id) => {
     if (!confirm('Supprimer ce rouleau ?')) return;
     try {
-      await api.delete(`/rolls/${id}`);
+      await api.delete(`/api/rolls/${id}`);
       await reload();
     } catch (err) {
       setMessage(err.response?.data?.message || err.message);
@@ -1080,7 +1080,7 @@ function Quotations() {
 
     const t = setTimeout(async () => {
       try {
-        const response = await api.get(`/designs?search=${encodeURIComponent(q)}&limit=20`);
+        const response = await api.get(`/api/designs?search=${encodeURIComponent(q)}&limit=20`);
         if (designQueryTokens.current[index] !== token) return;
         const newSuggestions = [...designSuggestions];
         newSuggestions[index] = response.data || [];
@@ -1126,7 +1126,7 @@ function Quotations() {
     }
     // Fetch a roll for this color
     try {
-      const response = await api.get(`/rolls?colorId=${encodeURIComponent(colorId)}&limit=1`);
+      const response = await api.get(`/api/rolls?colorId=${encodeURIComponent(colorId)}&limit=1`);
       const rolls = response.data || [];
       const roll = rolls[0];
       if (roll) {
@@ -1197,17 +1197,17 @@ function Quotations() {
   const generateDelivery = async (quotation) => {
     setMessage('');
     try {
-      await api.post(`/commercial/quotations/${quotation.id}/delivery-note`, {});
+      await api.post(`/api/commercial/quotations/${quotation.id}/delivery-note`, {});
       await reload();
     } catch (err) {
       setMessage(err.response?.data?.message || err.message);
     }
   };
-  const remove = async (id) => { if(confirm('Supprimer ce devis ?')) { await api.delete(`/commercial/quotations/${id}`); reload(); } };
+  const remove = async (id) => { if(confirm('Supprimer ce devis ?')) { await api.delete(`/api/commercial/quotations/${id}`); reload(); } };
 
 
   const updateStatus = async (quotation, status) => {
-    await api.patch(`/commercial/quotations/${quotation.id}/status`, { status });
+    await api.patch(`/api/commercial/quotations/${quotation.id}/status`, { status });
     await reload();
   };
 
@@ -1247,7 +1247,7 @@ function Quotations() {
 
     const t = setTimeout(async () => {
       try {
-        const response = await api.get(`/customers/search?q=${encodeURIComponent(q)}`);
+        const response = await api.get(`/api/customers/search?q=${encodeURIComponent(q)}`);
         if (customerQueryTokenRef.current !== token) return;
         setCustomerSuggestions(response.data || []);
       } catch (err) {
@@ -1460,7 +1460,7 @@ function Quotations() {
         actions={(row) => (
           <div className="row-actions">
             <Autocomplete options={Object.entries(quotationStatusLabels).map(([value, label]) => ({ value, label }))} getOptionLabel={(opt) => opt.label} getOptionValue={(opt) => opt.value} value={row.status} onChange={(v) => updateStatus(row, v)} />
-            <button className="btn btn-sm btn-outline-dark" onClick={() => downloadBlob(`/commercial/quotations/${row.id}/pdf`, `${row.quotationNumber}.pdf`)}><FiDownload /></button>
+            <button className="btn btn-sm btn-outline-dark" onClick={() => downloadBlob(`/api/commercial/quotations/${row.id}/pdf`, `${row.quotationNumber}.pdf`)}><FiDownload /></button>
             <button className="btn btn-sm btn-dark" onClick={() => generateDelivery(row)} disabled={Boolean(row.deliveryNote)}>BL</button>
             <button className="btn btn-sm btn-outline-danger" onClick={() => remove(row.id)}><FiX /></button>
           </div>
@@ -1479,7 +1479,7 @@ function DeliveryNotes() {
     if (!confirm(`Accepter le bon de livraison ${delivery.deliveryNumber} ?\nLe stock sera déduit automatiquement.`)) return;
     setMessage('');
     try {
-      await api.post(`/commercial/delivery-notes/${delivery.id}/accept`);
+      await api.post(`/api/commercial/delivery-notes/${delivery.id}/accept`);
       await reload();
     } catch (err) {
       setMessage(err.response?.data?.message || err.message);
@@ -1489,7 +1489,7 @@ function DeliveryNotes() {
   const generateInvoice = async (delivery) => {
     setMessage('');
     try {
-      await api.post(`/commercial/delivery-notes/${delivery.id}/invoice`, {});
+      await api.post(`/api/commercial/delivery-notes/${delivery.id}/invoice`, {});
       await reload();
     } catch (err) {
       setMessage(err.response?.data?.message || err.message);
@@ -1500,7 +1500,7 @@ function DeliveryNotes() {
     if (!confirm('Supprimer ce bon de livraison ?')) return;
     setMessage('');
     try {
-      await api.delete(`/commercial/delivery-notes/${id}`);
+      await api.delete(`/api/commercial/delivery-notes/${id}`);
       await reload();
     } catch (err) {
       setMessage(err.response?.data?.message || err.message);
@@ -1526,7 +1526,7 @@ function DeliveryNotes() {
             {row.status === 'DRAFT' && (
               <button className="btn btn-sm btn-success" onClick={() => acceptDelivery(row)}><FiCheckCircle /></button>
             )}
-            <button className="btn btn-sm btn-outline-dark" onClick={() => downloadBlob(`/commercial/delivery-notes/${row.id}/pdf`, `${row.deliveryNumber}.pdf`)}><FiDownload /></button>
+            <button className="btn btn-sm btn-outline-dark" onClick={() => downloadBlob(`/api/commercial/delivery-notes/${row.id}/pdf`, `${row.deliveryNumber}.pdf`)}><FiDownload /></button>
             <button className="btn btn-sm btn-dark" onClick={() => generateInvoice(row)} disabled={row.status !== 'ACCEPTED' || Boolean(row.invoice)}>Facture</button>
             {/* Suppression uniquement si non accepté */}
             {row.status !== 'ACCEPTED' && (
@@ -1544,7 +1544,7 @@ function Invoices() {
   const [message, setMessage] = useState('');
 
   const updatePayment = async (invoice, paymentStatus) => {
-    await api.patch(`/commercial/invoices/${invoice.id}/payment`, { paymentStatus });
+    await api.patch(`/api/commercial/invoices/${invoice.id}/payment`, { paymentStatus });
     await reload();
   };
 
@@ -1552,7 +1552,7 @@ function Invoices() {
     if (!confirm('Supprimer cette facture ?')) return;
     setMessage('');
     try {
-      await api.delete(`/commercial/invoices/${id}`);
+      await api.delete(`/api/commercial/invoices/${id}`);
       await reload();
     } catch (err) {
       setMessage(err.response?.data?.message || err.message);
@@ -1575,7 +1575,7 @@ function Invoices() {
         actions={(row) => (
           <div className="row-actions">
             <Autocomplete options={Object.entries(paymentStatusLabels).map(([value, label]) => ({ value, label }))} getOptionLabel={(opt) => opt.label} getOptionValue={(opt) => opt.value} value={row.paymentStatus} onChange={(v) => updatePayment(row, v)} />
-            <button className="btn btn-sm btn-outline-dark" onClick={() => downloadBlob(`/commercial/invoices/${row.id}/pdf`, `${row.invoiceNumber}.pdf`)}><FiDownload /></button>
+            <button className="btn btn-sm btn-outline-dark" onClick={() => downloadBlob(`/api/commercial/invoices/${row.id}/pdf`, `${row.invoiceNumber}.pdf`)}><FiDownload /></button>
             <button className="btn btn-sm btn-outline-danger" onClick={() => remove(row.id)}><FiX /></button>
           </div>
         )}
@@ -1588,14 +1588,14 @@ function Reports() {
   const types = ['inventory', 'sales', 'revenue', 'customers', 'suppliers', 'lowStock', 'deliveryNotes', 'quotations', 'invoices'];
   const [type, setType] = useState('inventory');
   const [exportError, setExportError] = useState('');
-  const { data, reload } = useFetch(`/reports/${type}`, [type]);
+  const { data, reload } = useFetch(`/api/reports/${type}`, [type]);
   const rows = data.rows || [];
   const columns = (data.columns || []).map((column) => [column, column]);
 
   const downloadReport = async (format) => {
     setExportError('');
     try {
-      const response = await api.get(`/reports/${type}/${format}`, { responseType: 'blob' });
+      const response = await api.get(`/api/reports/${type}/${format}`, { responseType: 'blob' });
       const disposition = response.headers['content-disposition'] || '';
       const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `${type}_rapport.${format}`;
       const url = URL.createObjectURL(response.data);
@@ -1637,7 +1637,7 @@ function QRCodes() {
   const designs = data.designs || [];
   const regenerate = async (item) => {
     const group = item.type === 'design' ? 'designs' : 'references';
-    await api.post(`/qr/${group}/${item.id}/regenerate`);
+    await api.post(`/api/qr/${group}/${item.id}/regenerate`);
     await reload();
   };
   const cards = [...references, ...designs];
