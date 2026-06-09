@@ -1,0 +1,422 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+enum MovementType {
+  ENTRY
+  EXIT
+  SALE
+  ADJUSTMENT
+}
+
+enum AvailabilityStatus {
+  DISPONIBLE
+  STOCK_LIMITED
+  INDISPONIBLE
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PAID
+  PARTIALLY_PAID
+  UNPAID
+}
+
+enum DeliveryNoteStatus {
+  DRAFT
+  ACCEPTED
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      String   @default("ADMIN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotations    Quotation[]
+  deliveryNotes DeliveryNote[]
+  invoices      Invoice[]
+}
+
+model Reference {
+  id              String   @id @default(cuid())
+
+  articleCode     Int      @unique
+  name            String
+  slug            String   @unique
+
+  qrCodeUrl       String?
+
+  totalMeters     Float    @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  designs         Design[]
+}
+
+model Design {
+  id              String   @id @default(cuid())
+
+  designCode      Int      @unique
+  name            String
+
+  qrCodeUrl       String?
+
+  referenceId     String
+  reference       Reference @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+
+  totalMeters     Float    @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  colors          Color[]
+
+  @@index([referenceId])
+}
+
+model Color {
+  id              String   @id @default(cuid())
+
+  code            String
+  displayName     String?
+
+  designId        String
+  design          Design @relation(fields: [designId], references: [id], onDelete: Cascade)
+
+  totalMeters     Float @default(0)
+
+  status          AvailabilityStatus @default(INDISPONIBLE)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  rolls           Roll[]
+
+  @@index([designId])
+}
+
+model Roll {
+  id              String   @id @default(cuid())
+
+  barcode         String   @unique
+  articleCode     Int      @unique
+
+  rollNumber      String
+
+  meters          Float
+
+  remainingMeters Float
+
+  purchasePrice   Float    @default(0)
+  sellingPrice    Float    @default(0)
+
+  supplierId      String?
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+
+  notes           String?
+
+  colorId         String
+  color           Color @relation(fields: [colorId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sales           Sale[]
+  movements       StockMovement[]
+  quotationItems  QuotationItem[]
+  deliveryItems   DeliveryNoteItem[]
+  invoiceItems    InvoiceItem[]
+
+  @@index([articleCode])
+  @@index([colorId])
+  @@index([supplierId])
+}
+
+model Customer {
+  id              String   @id @default(cuid())
+
+  customerCode   Int      @unique
+  fullName        String
+  phone           String
+  email           String?
+  address         String?
+  matriculeFiscale String?
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sales           Sale[]
+  quotations      Quotation[]
+  deliveryNotes   DeliveryNote[]
+  invoices        Invoice[]
+
+  @@index([customerCode])
+  @@index([fullName])
+  @@index([phone])
+}
+
+
+model Supplier {
+  id              String   @id @default(cuid())
+
+  companyName     String
+  contactPerson   String?
+  phone           String
+  email           String?
+  address         String?
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  rolls           Roll[]
+}
+
+model Sale {
+  id              String   @id @default(cuid())
+
+  invoiceNumber   String   @unique
+
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  customerName    String?
+
+  metersSold      Float
+
+  pricePerMeter   Float
+
+  totalAmount     Float
+
+  rollId          String
+  roll            Roll @relation(fields: [rollId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+
+  @@index([rollId])
+  @@index([customerId])
+}
+
+model StockMovement {
+  id              String   @id @default(cuid())
+
+  type            MovementType
+
+  quantity        Float
+
+  reason          String?
+
+  rollId          String
+  roll            Roll @relation(fields: [rollId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+
+  @@index([rollId])
+
+}
+
+model Quotation {
+  id              String          @id @default(cuid())
+
+  quotationNumber String          @unique
+  status          QuotationStatus @default(DRAFT)
+
+  customerId      String?
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  customerName    String?
+  customerPhone   String?
+  customerAddress String?
+
+  notes           String?
+  pdfPath         String?
+
+  totalHt         Float           @default(0)
+  totalTva        Float           @default(0)
+  stampDuty       Float           @default(1)
+  netToPay        Float           @default(0)
+
+  createdById     String?
+  createdBy       Admin?          @relation(fields: [createdById], references: [id])
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  items           QuotationItem[]
+  deliveryNote    DeliveryNote?
+
+  @@index([customerId])
+  @@index([createdById])
+}
+
+model QuotationItem {
+  id              String    @id @default(cuid())
+
+  quotationId     String
+  quotation       Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  rollId          String?
+  roll            Roll?     @relation(fields: [rollId], references: [id], onDelete: SetNull)
+
+  articleCode     String
+  designation     String
+  quantity        Float
+  unit            String    @default("m")
+  unitPriceHt     Float     @default(0)
+  tvaRate         Float     @default(19)
+  totalHt         Float     @default(0)
+  remiseRate      Float     @default(0)
+
+  @@index([quotationId])
+  @@index([rollId])
+}
+
+model DeliveryNote {
+  id              String    @id @default(cuid())
+
+  deliveryNumber  String    @unique
+  status          DeliveryNoteStatus @default(DRAFT)
+  acceptedAt      DateTime?
+
+  quotationId     String    @unique
+  quotation       Quotation @relation(fields: [quotationId], references: [id])
+
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  customerName    String?
+  deliveryAddress String?
+  driver          String?
+  notes           String?
+  pdfPath         String?
+
+  totalQuantity   Float     @default(0)
+
+  createdById     String?
+  createdBy       Admin?    @relation(fields: [createdById], references: [id])
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  items           DeliveryNoteItem[]
+  invoice         Invoice?
+
+  @@index([customerId])
+  @@index([createdById])
+}
+
+model DeliveryNoteItem {
+  id              String       @id @default(cuid())
+
+  deliveryNoteId  String
+  deliveryNote    DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+
+  rollId          String?
+  roll            Roll?        @relation(fields: [rollId], references: [id], onDelete: SetNull)
+
+  articleCode     String
+  designation     String
+  quantity        Float
+  unit            String       @default("m")
+
+  @@index([deliveryNoteId])
+  @@index([rollId])
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+
+  invoiceNumber   String        @unique
+
+  deliveryNoteId  String        @unique
+  deliveryNote    DeliveryNote  @relation(fields: [deliveryNoteId], references: [id])
+
+  customerId      String?
+  customer        Customer?     @relation(fields: [customerId], references: [id])
+  customerName    String?
+  mfNumber        String?
+  notes           String?
+  paymentStatus   PaymentStatus @default(UNPAID)
+  pdfPath         String?
+
+  totalHt         Float         @default(0)
+  totalTva        Float         @default(0)
+  stampDuty       Float         @default(1)
+  netToPay        Float         @default(0)
+
+  createdById     String?
+  createdBy       Admin?        @relation(fields: [createdById], references: [id])
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  items           InvoiceItem[]
+
+  @@index([customerId])
+  @@index([createdById])
+}
+
+model InvoiceItem {
+  id              String  @id @default(cuid())
+
+  invoiceId       String
+  invoice         Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  rollId          String?
+  roll            Roll?   @relation(fields: [rollId], references: [id], onDelete: SetNull)
+
+  articleCode     String
+  designation     String
+  quantity        Float
+  unit            String  @default("m")
+  unitPriceHt     Float   @default(0)
+  tvaRate         Float   @default(19)
+  unitPriceTtc    Float   @default(0)
+  remiseRate      Float   @default(0)
+  totalHt         Float   @default(0)
+
+  @@index([invoiceId])
+  @@index([rollId])
+}
+
+model MonthlyReport {
+  id                String   @id @default(cuid())
+
+  year              Int
+  month             Int
+
+  totalRevenue      Float @default(0)
+
+  totalMetersSold   Float @default(0)
+
+  totalSalesCount   Int @default(0)
+
+  xlsxFilePath      String?
+
+  createdAt         DateTime @default(now())
+
+  @@unique([year, month])
+}
+
+model Sequence {
+  name      String  @id
+  lastValue Int     @default(0)
+}

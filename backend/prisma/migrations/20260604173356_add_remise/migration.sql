@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "InvoiceItem" ADD COLUMN     "remiseRate" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "QuotationItem" ADD COLUMN     "remiseRate" DOUBLE PRECISION NOT NULL DEFAULT 0;
