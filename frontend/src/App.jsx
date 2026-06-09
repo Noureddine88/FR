@@ -1724,6 +1724,7 @@ export default function App() {
   return (
     <Router future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <Routes>
+        <Route path="/auth/login" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/article/:slug" element={<ArticlePublicPage />} />
         <Route path="/reference/:slug" element={<ReferencePublicPage />} />
