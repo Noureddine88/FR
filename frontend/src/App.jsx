@@ -420,7 +420,7 @@ function Login() {
     event.preventDefault();
     setError('');
     try {
-      const response = await api.post(`/auth/${mode === 'login' ? 'login' : 'bootstrap'}`, form);
+      const response = await api.post(`/api/auth/${mode === 'login' ? 'login' : 'bootstrap'}`, form);
       localStorage.setItem('curtain_erp_token', response.data.token);
       navigate('/');
     } catch (err) {
