@@ -16,7 +16,6 @@ WHERE d.id = numbered.id;
 UPDATE "Design" SET "designCode" = 1 WHERE "designCode" IS NULL;
 
 ALTER TABLE "Design" ALTER COLUMN "designCode" SET NOT NULL;
-
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Design_designCode_key" ON "Design"("designCode");
 CREATE INDEX IF NOT EXISTS IF NOT EXISTS "Design_designCode_idx" ON "Design"("designCode");
