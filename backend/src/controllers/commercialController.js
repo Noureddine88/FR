@@ -28,7 +28,7 @@ const calcTotals = (items = [], stampDuty = 1) => {
     const grossAmount = quantity * unitPriceHt;
     const discountAmount = grossAmount * (remiseRate / 100);
     const netAmountHt = grossAmount - discountAmount;
-    const tvaAmount = netAmountHt * (tvaRate / 100);
+    const tvaAmount = grossAmount * (tvaRate / 100);
 
     return {
       ...item,
