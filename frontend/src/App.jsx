@@ -384,7 +384,7 @@ function Shell({ children }) {
         <div className="brand">
           <div className="brand-mark">FR</div>
           <div>
-            <strong>KENZA PEO</strong>
+            <strong>KENZA PRO</strong>
             <span>Gestion du stock</span>
           </div>
         </div>
@@ -432,7 +432,7 @@ function Login() {
     <main className="login-page">
       <form className="login-panel" onSubmit={submit}>
         <div className="brand-mark large">FR</div>
-        <h1>KENZA PEO</h1>
+        <h1>KENZA PRO</h1>
         <div className="segmented">
           <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>
             Connexion
