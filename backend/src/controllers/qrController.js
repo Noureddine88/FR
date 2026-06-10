@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 import { prisma } from '../config/prisma.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
-const appUrl = () => process.env.PUBLIC_APP_URL || 'http://localhost:5173';
+const appUrl = () => process.env.PUBLIC_APP_URL || 'fouratilog.netlify.app';
 
 export const listQrCodes = asyncHandler(async (req, res) => {
   let [references, designs] = await Promise.all([
