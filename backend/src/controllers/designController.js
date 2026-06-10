@@ -48,7 +48,7 @@ export const createDesign = asyncHandler(async (req, res) => {
   const nextCode = (max._max.designCode ?? -1) + 1;
 
   const design = await prisma.design.create({ data: { designCode: nextCode, name: name.trim(), referenceId } });
-  const publicUrl = `${process.env.PUBLIC_APP_URL || 'http://localhost:5173'}/design/${design.id}`;
+  const publicUrl = `${process.env.PUBLIC_APP_URL || 'https://fouratilog.netlify.app'}/design/${design.id}`;
   const qrCodeUrl = await QRCode.toDataURL(publicUrl);
   const updated = await prisma.design.update({ where: { id: design.id }, data: { qrCodeUrl } });
   res.status(201).json(updated);

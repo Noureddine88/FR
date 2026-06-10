@@ -55,7 +55,7 @@ export const createReference = asyncHandler(async (req, res) => {
   let i = 2;
   while (await prisma.reference.findUnique({ where: { slug } })) slug = `${baseSlug}-${i++}`;
 
-  const publicUrl = `${process.env.PUBLIC_APP_URL || 'http://localhost:5173'}/reference/${slug}`;
+  const publicUrl = `${process.env.PUBLIC_APP_URL || 'https://fouratilog.netlify.app'}/reference/${slug}`;
   const qrCodeUrl = await QRCode.toDataURL(publicUrl);
   const reference = await prisma.reference.create({ data: { articleCode: nextCode, name, slug, qrCodeUrl } });
   res.status(201).json(reference);
