@@ -472,7 +472,7 @@ function PageHeader({ title, action, onReload }) {
 }
 
 function Dashboard() {
-  const { data, loading, error, reload } = useFetch('/reports/dashboard');
+  const { data, loading, error, reload } = useFetch('/api/reports/dashboard');
   const totals = data.totals || {};
 
   return (
@@ -719,7 +719,7 @@ function References() {
   return (
     <ResourcePage
       title="Articles"
-      path="/references"
+      path="/api/references"
       fields={[{ name: 'name', label: 'Nom de l\'article', required: true }]}
       filters={[
         { name: 'search', label: 'Rechercher article, design, couleur, rouleau' },
@@ -739,12 +739,12 @@ function References() {
 }
 
 function Designs() {
-  const { data: references } = useFetch('/references');
+  const { data: references } = useFetch('/api/references');
   const refOptions = references.map((r) => ({ ...r, codeLabel: `${String(r.articleCode ?? '').padStart(4, '0')} - ${r.name}` }));
   return (
     <ResourcePage
       title="Designs"
-      path="/designs"
+      path="/api/designs"
       fields={[
         { name: 'name', label: 'Nom du design', required: true },
         { name: 'referenceId', label: 'Article', options: refOptions, optionLabel: (r) => r.codeLabel, fromRow: (row) => row.referenceId, required: true },
@@ -769,12 +769,12 @@ function Designs() {
 }
 
 function Colors() {
-  const { data: references } = useFetch('/references');
-  const { data: designs } = useFetch('/designs');
+  const { data: references } = useFetch('/api/references');
+  const { data: designs } = useFetch('/api/designs');
   return (
     <ResourcePage
       title="Couleurs"
-      path="/colors"
+      path="/api/colors"
       fields={[
         { name: 'code', label: 'Code', required: true },
         { name: 'displayName', label: 'Nom affiché' },
@@ -802,11 +802,11 @@ function Colors() {
 }
 
 function Rolls() {
-  const { data: colors } = useFetch('/colors');
-  const { data: suppliers } = useFetch('/suppliers');
+  const { data: colors } = useFetch('/api/colors');
+  const { data: suppliers } = useFetch('/api/suppliers');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const rollsPath = searchQuery ? `/api/rolls?search=${encodeURIComponent(searchQuery)}` : '/rolls';
+  const rollsPath = searchQuery ? `/api/rolls?search=${encodeURIComponent(searchQuery)}` : '/api/rolls';
   const { data, reload } = useFetch(rollsPath, [searchQuery]);
   const [form, setForm] = useState({});
   const [editing, setEditing] = useState(null);
@@ -851,7 +851,7 @@ function Rolls() {
       if (editing) {
         await api.put(`/api/rolls/${editing}`, payload);
       } else {
-        await api.post('/rolls', payload);
+        await api.post('/api/rolls', payload);
       }
       reset();
       await reload();
@@ -926,7 +926,7 @@ function Customers() {
   return (
     <ResourcePage
       title="Clients"
-      path="/customers"
+      path="/api/customers"
       fields={[
         { name: 'fullName', label: 'Nom', required: true },
         { name: 'phone', label: 'Téléphone', required: true },
@@ -951,12 +951,12 @@ function Customers() {
 
 
 function Suppliers() {
-  return <ResourcePage title="Fournisseurs" path="/suppliers" fields={[{ name: 'companyName', label: 'Société', required: true }, { name: 'contactPerson', label: 'Contact' }, { name: 'phone', label: 'Téléphone', required: true }, { name: 'email', label: 'Email' }]} columns={[['Société', 'companyName'], ['Téléphone', 'phone'], ['Rouleaux', 'deliveredRolls'], ['Mètres', (row) => meters(row.purchasedMeters)], ['Valeur achat', (row) => money(row.purchaseValue)]]} />;
+  return <ResourcePage title="Fournisseurs" path="/api/suppliers" fields={[{ name: 'companyName', label: 'Société', required: true }, { name: 'contactPerson', label: 'Contact' }, { name: 'phone', label: 'Téléphone', required: true }, { name: 'email', label: 'Email' }]} columns={[['Société', 'companyName'], ['Téléphone', 'phone'], ['Rouleaux', 'deliveredRolls'], ['Mètres', (row) => meters(row.purchasedMeters)], ['Valeur achat', (row) => money(row.purchaseValue)]]} />;
 }
 
 function Sales() {
-  const { data: customers } = useFetch('/customers');
-  const { data: sales, reload } = useFetch('/sales');
+  const { data: customers } = useFetch('/api/customers');
+  const { data: sales, reload } = useFetch('/api/sales');
   const [form, setForm] = useState({ articleLabel: '' });
   const [selectedRoll, setSelectedRoll] = useState(null);
 
@@ -968,7 +968,7 @@ function Sales() {
 
   const submit = async (event) => {
     event.preventDefault();
-    await api.post('/sales', { ...form, rollId: selectedRoll?.id });
+    await api.post('/api/sales', { ...form, rollId: selectedRoll?.id });
     setForm({ articleLabel: '' });
     setSelectedRoll(null);
     await reload();
@@ -1006,8 +1006,8 @@ function Sales() {
 }
 
 function Quotations() {
-  const { data, reload } = useFetch('/commercial/quotations');
-  const { data: allDesigns } = useFetch('/designs');
+  const { data, reload } = useFetch('/api/commercial/quotations');
+  const { data: allDesigns } = useFetch('/api/designs');
 
   // smooth customer autocomplete (backend driven)
   const [customerSearch, setCustomerSearch] = useState('');
@@ -1172,7 +1172,7 @@ function Quotations() {
       };
     });
     try {
-      await api.post('/commercial/quotations', {
+      await api.post('/api/commercial/quotations', {
         ...form,
         items: cleanItems,
         customerId: form.customerId || null,
@@ -1471,7 +1471,7 @@ function Quotations() {
 }
 
 function DeliveryNotes() {
-  const { data, reload } = useFetch('/commercial/delivery-notes');
+  const { data, reload } = useFetch('/api/commercial/delivery-notes');
   const [message, setMessage] = useState('');
 
 
@@ -1540,7 +1540,7 @@ function DeliveryNotes() {
 }
 
 function Invoices() {
-  const { data, reload } = useFetch('/commercial/invoices');
+  const { data, reload } = useFetch('/api/commercial/invoices');
   const [message, setMessage] = useState('');
 
   const updatePayment = async (invoice, paymentStatus) => {
@@ -1632,7 +1632,7 @@ function Reports() {
 }
 
 function QRCodes() {
-  const { data, reload } = useFetch('/qr');
+  const { data, reload } = useFetch('/api/qr');
   const references = data.references || [];
   const designs = data.designs || [];
   const regenerate = async (item) => {
@@ -1664,7 +1664,7 @@ function QRCodes() {
 
 function StockPublicPage({ type }) {
   const { slug, id } = useParams();
-  const path = type === 'design' ? `/design/${id}` : `/reference/${slug}`;
+  const path = type === 'design' ? `/api/design/${id}` : `/api/reference/${slug}`;
   const { data, loading, error, reload } = useFetch(path, [path]);
   const isDesign = type === 'design';
   const total = isDesign ? data.totalMeters : data.designs?.reduce((sum, design) => sum + Number(design.totalMeters || 0), 0);
