@@ -1686,7 +1686,6 @@ function StockPublicPage({ type }) {
         <button className="icon-button light" type="button" onClick={reload} title="Actualiser"><FiRefreshCw /></button>
       </div>
       <div className="public-summary">
-        <strong>{meters(total)}</strong>
         <Badge status={overallStatus} />
       </div>
       {designs.map((design) => (
@@ -1696,7 +1695,6 @@ function StockPublicPage({ type }) {
             {design.colors.map((color) => (
               <div className="public-color" key={color.id}>
                 <span>{color.displayName || color.code}</span>
-                <strong>{meters(color.totalMeters)}</strong>
                 <Badge status={color.status} />
               </div>
             ))}
