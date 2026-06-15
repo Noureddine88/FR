@@ -22,6 +22,7 @@ import {
   FiX,
 } from 'react-icons/fi';
 import api from './api/axios.js';
+import { generateQuotationPdf, generateDeliveryPdf, generateInvoicePdf } from './utils/commercialPdf.js';
 import './App.css';
 
 const navItems = [
@@ -1020,6 +1021,7 @@ function Quotations() {
   const itemKeyRef = useRef(1);
   const [items, setItems] = useState([{ _key: 0, rollId: '', articleCode: '', articleLabel: '', designation: '', quantity: '', unit: 'm', unitPriceHt: '', remiseRate: 0, tvaRate: 19, selectedDesignId: '', selectedColorId: '' }]);
   const [message, setMessage] = useState('');
+  const [editingId, setEditingId] = useState(null);
 
   const setItem = (index, values) => setItems((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...values } : item)));
   const addItem = () => {
@@ -1033,6 +1035,49 @@ function Quotations() {
     setDesignSearches((prev) => prev.filter((_, i) => i !== index));
     setDesignDropdowns((prev) => prev.filter((_, i) => i !== index));
     setDesignSuggestions((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setForm({ customerId: '', customerName: '', customerPhone: '', customerAddress: '', customerMatriculeFiscale: '', notes: '' });
+    setCustomerSearch('');
+    itemKeyRef.current = 1;
+    setItems([{ _key: 0, rollId: '', articleCode: '', articleLabel: '', designation: '', quantity: '', unit: 'm', unitPriceHt: '', remiseRate: 0, tvaRate: 19, selectedDesignId: '', selectedColorId: '' }]);
+    setDesignSearches(['']);
+    setDesignDropdowns([false]);
+    setDesignSuggestions([[]]);
+  };
+
+  const startEdit = (quotation) => {
+    setEditingId(quotation.id);
+    setForm({
+      customerId: quotation.customerId || '',
+      customerName: quotation.customerName || '',
+      customerPhone: quotation.customerPhone || '',
+      customerAddress: quotation.customerAddress || '',
+      customerMatriculeFiscale: quotation.customer?.matriculeFiscale || '',
+      notes: quotation.notes || '',
+    });
+    setCustomerSearch(quotation.customer ? `${String(quotation.customer.customerCode).padStart(4, '0')} - ${quotation.customer.fullName}` : (quotation.customerName || ''));
+    const mapped = (quotation.items || []).map((item, i) => ({
+      _key: i,
+      rollId: item.rollId || '',
+      articleCode: item.articleCode || '',
+      articleLabel: '',
+      designation: item.designation || '',
+      quantity: String(item.quantity || ''),
+      unit: item.unit || 'm',
+      unitPriceHt: String(item.unitPriceHt || ''),
+      remiseRate: item.remiseRate ?? 0,
+      tvaRate: item.tvaRate ?? 19,
+      selectedDesignId: '',
+      selectedColorId: '',
+    }));
+    setItems(mapped);
+    setDesignSearches(mapped.map(() => ''));
+    setDesignDropdowns(mapped.map(() => false));
+    setDesignSuggestions(mapped.map(() => []));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Design autocomplete state (per-row)
@@ -1164,7 +1209,6 @@ function Quotations() {
   const submit = async (event) => {
     event.preventDefault();
     setMessage('');
-    // Clean items: remove internal UI fields, ensure required fields exist
     const cleanItems = items.map((item) => {
       const { _key, articleLabel, selectedDesignId, selectedColorId, ...rest } = item;
       return {
@@ -1178,22 +1222,32 @@ function Quotations() {
       };
     });
     try {
-      await api.post('/api/commercial/quotations', {
-        ...form,
-        items: cleanItems,
-        customerId: form.customerId || null,
-        customerName: form.customerName || null,
-        customerPhone: form.customerPhone || null,
-        customerAddress: form.customerAddress || null,
-        customerMatriculeFiscale: form.customerMatriculeFiscale || null,
-      });
-      setForm({ customerId: '', customerName: '', customerPhone: '', customerAddress: '', customerMatriculeFiscale: '', notes: '' });
-      setCustomerSearch('');
-      itemKeyRef.current = 1;
-      setItems([{ _key: 0, rollId: '', articleCode: '', articleLabel: '', designation: '', quantity: '', unit: 'm', unitPriceHt: '', remiseRate: 0, tvaRate: 19, selectedDesignId: '', selectedColorId: '' }]);
-      setDesignSearches(['']);
-      setDesignDropdowns([false]);
-      setDesignSuggestions([[]]);
+      if (editingId) {
+        const res = await api.put(`/api/commercial/quotations/${editingId}`, {
+          ...form,
+          items: cleanItems,
+          customerId: form.customerId || null,
+          customerName: form.customerName || null,
+          customerPhone: form.customerPhone || null,
+          customerAddress: form.customerAddress || null,
+          customerMatriculeFiscale: form.customerMatriculeFiscale || null,
+        });
+        // If BL was accepted, backend created a new devis — show its number
+        if (res.data.id !== editingId) {
+          setMessage(`Devis modifié et sauvegardé sous le nouveau numéro ${res.data.quotationNumber} (l'ancien est verrouillé car son BL est accepté)`);
+        }
+      } else {
+        await api.post('/api/commercial/quotations', {
+          ...form,
+          items: cleanItems,
+          customerId: form.customerId || null,
+          customerName: form.customerName || null,
+          customerPhone: form.customerPhone || null,
+          customerAddress: form.customerAddress || null,
+          customerMatriculeFiscale: form.customerMatriculeFiscale || null,
+        });
+      }
+      resetForm();
       await reload();
     } catch (err) {
       setMessage(err.response?.data?.message || err.message);
@@ -1452,7 +1506,14 @@ function Quotations() {
           </table>
         </div>
         <button className="btn btn-outline-secondary" type="button" onClick={addItem}><FiPlus /> Article</button>
-        <button className="btn btn-dark" type="submit"><FiFileText /> Créer devis</button>
+        {editingId ? (
+          <>
+            <button className="btn btn-dark" type="submit"><FiEdit2 /> Modifier devis</button>
+            <button className="btn btn-outline-secondary" type="button" onClick={resetForm}><FiX /> Annuler</button>
+          </>
+        ) : (
+          <button className="btn btn-dark" type="submit"><FiFileText /> Créer devis</button>
+        )}
       </form>
       <DataTable
         rows={data}
@@ -1466,8 +1527,9 @@ function Quotations() {
         actions={(row) => (
           <div className="row-actions">
             <Autocomplete options={Object.entries(quotationStatusLabels).map(([value, label]) => ({ value, label }))} getOptionLabel={(opt) => opt.label} getOptionValue={(opt) => opt.value} value={row.status} onChange={(v) => updateStatus(row, v)} />
-            <button className="btn btn-sm btn-outline-dark" onClick={() => downloadBlob(`/api/commercial/quotations/${row.id}/pdf`, `${row.quotationNumber}.pdf`)}><FiDownload /></button>
+            <button className="btn btn-sm btn-outline-dark" onClick={() => generateQuotationPdf(row).save(`${row.quotationNumber}.pdf`)}><FiDownload /></button>
             <button className="btn btn-sm btn-dark" onClick={() => generateDelivery(row)} disabled={Boolean(row.deliveryNote)}>BL</button>
+            <button className="btn btn-sm btn-outline-primary" onClick={() => startEdit(row)}><FiEdit2 /></button>
             <button className="btn btn-sm btn-outline-danger" onClick={() => remove(row.id)}><FiX /></button>
           </div>
         )}
@@ -1532,7 +1594,7 @@ function DeliveryNotes() {
             {row.status === 'DRAFT' && (
               <button className="btn btn-sm btn-success" onClick={() => acceptDelivery(row)}><FiCheckCircle /></button>
             )}
-            <button className="btn btn-sm btn-outline-dark" onClick={() => downloadBlob(`/api/commercial/delivery-notes/${row.id}/pdf`, `${row.deliveryNumber}.pdf`)}><FiDownload /></button>
+            <button className="btn btn-sm btn-outline-dark" onClick={() => generateDeliveryPdf(row).save(`${row.deliveryNumber}.pdf`)}><FiDownload /></button>
             <button className="btn btn-sm btn-dark" onClick={() => generateInvoice(row)} disabled={row.status !== 'ACCEPTED' || Boolean(row.invoice)}>Facture</button>
             {/* Suppression uniquement si non accepté */}
             {row.status !== 'ACCEPTED' && (
@@ -1581,7 +1643,7 @@ function Invoices() {
         actions={(row) => (
           <div className="row-actions">
             <Autocomplete options={Object.entries(paymentStatusLabels).map(([value, label]) => ({ value, label }))} getOptionLabel={(opt) => opt.label} getOptionValue={(opt) => opt.value} value={row.paymentStatus} onChange={(v) => updatePayment(row, v)} />
-            <button className="btn btn-sm btn-outline-dark" onClick={() => downloadBlob(`/api/commercial/invoices/${row.id}/pdf`, `${row.invoiceNumber}.pdf`)}><FiDownload /></button>
+            <button className="btn btn-sm btn-outline-dark" onClick={() => generateInvoicePdf(row).save(`${row.invoiceNumber}.pdf`)}><FiDownload /></button>
             <button className="btn btn-sm btn-outline-danger" onClick={() => remove(row.id)}><FiX /></button>
           </div>
         )}

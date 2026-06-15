@@ -7,13 +7,11 @@ import {
   deleteDeliveryNote,
   deleteInvoice,
   deleteQuotation,
-  downloadDeliveryPdf,
-  downloadInvoicePdf,
-  downloadQuotationPdf,
   listDeliveryNotes,
   listInvoices,
   listQuotations,
   updateInvoicePayment,
+  updateQuotation,
   updateQuotationStatus,
 } from '../controllers/commercialController.js';
 import { protect } from '../middleware/authMiddleware.js';
@@ -24,18 +22,16 @@ commercialRoutes.use(protect);
 
 commercialRoutes.get('/quotations', listQuotations);
 commercialRoutes.post('/quotations', createQuotation);
+commercialRoutes.put('/quotations/:id', updateQuotation);
 commercialRoutes.patch('/quotations/:id/status', updateQuotationStatus);
-commercialRoutes.get('/quotations/:id/pdf', downloadQuotationPdf);
 commercialRoutes.post('/quotations/:id/delivery-note', createDeliveryFromQuotation);
 commercialRoutes.delete('/quotations/:id', deleteQuotation);
 
 commercialRoutes.get('/delivery-notes', listDeliveryNotes);
 commercialRoutes.post('/delivery-notes/:id/accept', acceptDeliveryNote);
-commercialRoutes.get('/delivery-notes/:id/pdf', downloadDeliveryPdf);
 commercialRoutes.post('/delivery-notes/:id/invoice', createInvoiceFromDelivery);
 commercialRoutes.delete('/delivery-notes/:id', deleteDeliveryNote);
 
 commercialRoutes.get('/invoices', listInvoices);
 commercialRoutes.patch('/invoices/:id/payment', updateInvoicePayment);
-commercialRoutes.get('/invoices/:id/pdf', downloadInvoicePdf);
 commercialRoutes.delete('/invoices/:id', deleteInvoice);

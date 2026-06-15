@@ -1,15 +1,12 @@
-import fs from 'fs';
-import path from 'path';
 import { prisma } from '../config/prisma.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { generateDeliveryPdf, generateInvoicePdf, generateQuotationPdf } from '../utils/commercialPdf.js';
+
 import { nextCommercialInvoiceNumber, nextDeliveryNumber, nextQuotationNumber, recalculateColorTotals } from '../utils/stock.js';
 
 const includeQuotation = { customer: true, items: { include: { roll: { include: { color: { include: { design: { include: { reference: true } } } } } } } }, deliveryNote: true };
 const includeDelivery = { customer: true, quotation: { include: { items: true } }, items: { include: { roll: true } }, invoice: true };
 const includeInvoice = { customer: true, deliveryNote: true, items: { include: { roll: true } } };
 
-const number = (value) => Number(value || 0);
 const clean = (value) => (value === undefined || value === null ? undefined : String(value).trim());
 
 const calcTotals = (items = [], stampDuty = 1) => {
@@ -72,21 +69,6 @@ const searchable = (search) =>
     : {};
 
 
-const storageRoot = path.resolve('storage', 'commercial');
-
-const isSafePdfPath = (pdfPath) => {
-  if (!pdfPath) return false;
-  const resolved = path.resolve(pdfPath);
-  return resolved.startsWith(storageRoot + path.sep) || resolved === storageRoot;
-};
-
-const sendStoredPdf = (res, filePath) => {
-  if (!filePath || !fs.existsSync(filePath) || !isSafePdfPath(filePath)) {
-    return res.status(404).json({ message: 'Le fichier PDF est introuvable' });
-  }
-  return res.download(filePath);
-};
-
 export const listQuotations = asyncHandler(async (req, res) => {
   const search = req.query.search?.trim();
   const status = req.query.status?.trim();
@@ -136,11 +118,93 @@ export const createQuotation = asyncHandler(async (req, res) => {
     });
   });
 
-  const pdfPath = await generateQuotationPdf(quotation);
-  const updated = await prisma.quotation.update({ where: { id: quotation.id }, data: { pdfPath }, include: includeQuotation });
-  res.status(201).json(updated);
+  res.status(201).json(quotation);
 });
 
+export const updateQuotation = asyncHandler(async (req, res) => {
+  const { items, stampDuty, customerId, customerName, customerPhone, customerAddress, notes } = req.body;
+  if (!items?.length) return res.status(400).json({ message: 'Veuillez ajouter au moins un article au devis' });
+
+  const existing = await prisma.quotation.findUnique({
+    where: { id: req.params.id },
+    include: { deliveryNote: true, items: true },
+  });
+  if (!existing) return res.status(404).json({ message: 'Devis introuvable' });
+
+  const totals = calcTotals(items, stampDuty);
+  if (totals.items.some((item) => item.quantity <= 0)) return res.status(400).json({ message: 'Les quantités doivent être supérieures à zéro' });
+
+  // If BL is accepted → cannot edit, create a new devis instead
+  if (existing.deliveryNote?.status === 'ACCEPTED') {
+    const newQuotation = await prisma.$transaction(async (tx) => {
+      return tx.quotation.create({
+        data: {
+          quotationNumber: await nextQuotationNumber(tx),
+          customerId: customerId || existing.customerId,
+          customerName: clean(customerName) || existing.customerName,
+          customerPhone: clean(customerPhone) || existing.customerPhone,
+          customerAddress: clean(customerAddress) || existing.customerAddress,
+          notes: clean(notes) || existing.notes,
+          createdById: req.admin?.id || null,
+          totalHt: totals.totalHt,
+          totalTva: totals.totalTva,
+          stampDuty: totals.stampDuty,
+          netToPay: totals.netToPay,
+          items: {
+            create: totals.items.map((item) => ({
+              rollId: item.rollId || null,
+              articleCode: item.articleCode,
+              designation: item.designation,
+              quantity: item.quantity,
+              unit: item.unit ?? 'm',
+              unitPriceHt: item.unitPriceHt,
+              tvaRate: item.tvaRate,
+              remiseRate: item.remiseRate ?? 0,
+              totalHt: item.totalHt,
+            })),
+          },
+        },
+        include: includeQuotation,
+      });
+    });
+    return res.status(201).json(newQuotation);
+  }
+
+  // No BL or BL is DRAFT → update in-place
+  const quotation = await prisma.$transaction(async (tx) => {
+    await tx.quotationItem.deleteMany({ where: { quotationId: existing.id } });
+    return tx.quotation.update({
+      where: { id: existing.id },
+      data: {
+        customerId: customerId || null,
+        customerName: clean(customerName) || null,
+        customerPhone: clean(customerPhone) || null,
+        customerAddress: clean(customerAddress) || null,
+        notes: clean(notes) || null,
+        totalHt: totals.totalHt,
+        totalTva: totals.totalTva,
+        stampDuty: totals.stampDuty,
+        netToPay: totals.netToPay,
+        items: {
+          create: totals.items.map((item) => ({
+            rollId: item.rollId || null,
+            articleCode: item.articleCode,
+            designation: item.designation,
+            quantity: item.quantity,
+            unit: item.unit ?? 'm',
+            unitPriceHt: item.unitPriceHt,
+            tvaRate: item.tvaRate,
+            remiseRate: item.remiseRate ?? 0,
+            totalHt: item.totalHt,
+          })),
+        },
+      },
+      include: includeQuotation,
+    });
+  });
+
+  res.json(quotation);
+});
 
 export const updateQuotationStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
@@ -148,11 +212,6 @@ export const updateQuotationStatus = asyncHandler(async (req, res) => {
   if (!allowed.includes(status)) return res.status(400).json({ message: 'Le statut du devis est invalide' });
   const quotation = await prisma.quotation.update({ where: { id: req.params.id }, data: { status }, include: includeQuotation });
   res.json(quotation);
-});
-
-export const downloadQuotationPdf = asyncHandler(async (req, res) => {
-  const quotation = await prisma.quotation.findUnique({ where: { id: req.params.id } });
-  return sendStoredPdf(res, quotation?.pdfPath);
 });
 
 export const createDeliveryFromQuotation = asyncHandler(async (req, res) => {
@@ -188,9 +247,7 @@ export const createDeliveryFromQuotation = asyncHandler(async (req, res) => {
     return created;
   });
 
-  const pdfPath = await generateDeliveryPdf(delivery);
-  const updated = await prisma.deliveryNote.update({ where: { id: delivery.id }, data: { pdfPath }, include: includeDelivery });
-  res.status(201).json(updated);
+  res.status(201).json(delivery);
 });
 
 export const acceptDeliveryNote = asyncHandler(async (req, res) => {
@@ -263,9 +320,7 @@ export const acceptDeliveryNote = asyncHandler(async (req, res) => {
     }
   }
 
-  const pdfPath = await generateDeliveryPdf(delivery);
-  const updated = await prisma.deliveryNote.update({ where: { id: delivery.id }, data: { pdfPath }, include: includeDelivery });
-  res.json(updated);
+  res.json(delivery);
 });
 
 export const listDeliveryNotes = asyncHandler(async (req, res) => {
@@ -284,11 +339,6 @@ export const listDeliveryNotes = asyncHandler(async (req, res) => {
     orderBy: { createdAt: 'desc' },
   });
   res.json(deliveryNotes);
-});
-
-export const downloadDeliveryPdf = asyncHandler(async (req, res) => {
-  const delivery = await prisma.deliveryNote.findUnique({ where: { id: req.params.id } });
-  return sendStoredPdf(res, delivery?.pdfPath);
 });
 
 export const createInvoiceFromDelivery = asyncHandler(async (req, res) => {
@@ -343,8 +393,7 @@ export const createInvoiceFromDelivery = asyncHandler(async (req, res) => {
     });
   });
 
-  const pdfPath = await generateInvoicePdf(invoice);
-  return res.status(201).json(await prisma.invoice.update({ where: { id: invoice.id }, data: { pdfPath }, include: includeInvoice }));
+  return res.status(201).json(invoice);
 });
 
 export const listInvoices = asyncHandler(async (req, res) => {
@@ -375,12 +424,6 @@ export const updateInvoicePayment = asyncHandler(async (req, res) => {
   const invoice = await prisma.invoice.update({ where: { id: req.params.id }, data: { paymentStatus: req.body.paymentStatus }, include: includeInvoice });
   res.json(invoice);
 });
-
-export const downloadInvoicePdf = asyncHandler(async (req, res) => {
-  const invoice = await prisma.invoice.findUnique({ where: { id: req.params.id } });
-  return sendStoredPdf(res, invoice?.pdfPath);
-});
-
 
 export const deleteQuotation = asyncHandler(async (req, res) => {
   const quotation = await prisma.quotation.findUnique({
