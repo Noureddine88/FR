@@ -204,9 +204,34 @@ export const acceptDeliveryNote = asyncHandler(async (req, res) => {
       throw Object.assign(new Error('Ce bon de livraison est déjà accepté'), { statusCode: 409 });
 
     for (const item of current.items) {
-      if (!item.rollId) continue;
-      const roll = await tx.roll.findUnique({ where: { id: item.rollId } });
-      if (!roll) throw Object.assign(new Error(`Rouleau introuvable pour l'article ${item.articleCode}`), { statusCode: 404 });
+      let roll = null;
+
+      if (item.rollId) {
+        roll = await tx.roll.findUnique({ where: { id: item.rollId } });
+        if (!roll) throw Object.assign(new Error(`Rouleau introuvable pour l'article ${item.articleCode}`), { statusCode: 404 });
+      } else {
+        const articleCodeNum = parseInt(item.articleCode, 10);
+        if (isNaN(articleCodeNum))
+          throw Object.assign(new Error(`Code article invalide pour "${item.designation}" — impossible de trouver un rouleau en stock`), { statusCode: 400 });
+
+        roll = await tx.roll.findFirst({
+          where: { articleCode: articleCodeNum, remainingMeters: { gte: item.quantity } },
+          orderBy: { remainingMeters: 'desc' },
+        });
+        if (!roll) {
+          const anyRoll = await tx.roll.findFirst({ where: { articleCode: articleCodeNum } });
+          if (!anyRoll)
+            throw Object.assign(new Error(`Aucun rouleau trouvé pour le code article ${item.articleCode} (${item.designation})`), { statusCode: 404 });
+          throw Object.assign(new Error(`Stock insuffisant pour le code article ${item.articleCode} (${item.designation}) : il ne reste que ${anyRoll.remainingMeters} mètres, besoin de ${item.quantity}`), { statusCode: 400 });
+        }
+
+        await tx.deliveryNoteItem.update({ where: { id: item.id }, data: { rollId: roll.id } });
+        if (current.quotation) {
+          const qItem = current.quotation.items.find((qi) => qi.articleCode === item.articleCode && !qi.rollId);
+          if (qItem) await tx.quotationItem.update({ where: { id: qItem.id }, data: { rollId: roll.id } });
+        }
+      }
+
       if (roll.remainingMeters < item.quantity)
         throw Object.assign(new Error(`Stock insuffisant pour l'article ${item.articleCode} : il ne reste que ${roll.remainingMeters} mètres`), { statusCode: 400 });
 
