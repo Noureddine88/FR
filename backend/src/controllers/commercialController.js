@@ -120,7 +120,7 @@ export const createQuotation = asyncHandler(async (req, res) => {
         netToPay: totals.netToPay,
         items: {
           create: totals.items.map((item) => ({
-            rollId: item.rollId ?? null,
+            rollId: item.rollId || null,
             articleCode: item.articleCode,
             designation: item.designation,
             quantity: item.quantity,
@@ -174,7 +174,7 @@ export const createDeliveryFromQuotation = asyncHandler(async (req, res) => {
         totalQuantity: quotation.items.reduce((sum, item) => sum + item.quantity, 0),
         items: {
           create: quotation.items.map((item) => ({
-            rollId: item.rollId,
+            rollId: item.rollId || null,
             articleCode: item.articleCode,
             designation: item.designation,
             quantity: item.quantity,

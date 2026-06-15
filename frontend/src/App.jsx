@@ -1058,21 +1058,25 @@ function Quotations() {
     newSearches[index] = value;
     setDesignSearches(newSearches);
 
-    const newDropdowns = [...designDropdowns];
-    newDropdowns[index] = true;
-    setDesignDropdowns(newDropdowns);
-
     if (!value.trim()) {
       setItem(index, { selectedDesignId: '', selectedColorId: '', rollId: '', articleCode: '', articleLabel: '', designation: '', unitPriceHt: '' });
       const newSuggestions = [...designSuggestions];
       newSuggestions[index] = [];
       setDesignSuggestions(newSuggestions);
+      setDesignDropdowns((prev) => { const d = [...prev]; d[index] = false; return d; });
       return;
     }
+
+    // Sync typed text as designation for manual entry (no design selected)
+    setItem(index, { designation: value });
 
     const q = value.trim();
     const isNumeric = /^\d+$/.test(q);
     if (!isNumeric && q.length < 2) return;
+
+    const newDropdowns = [...designDropdowns];
+    newDropdowns[index] = true;
+    setDesignDropdowns(newDropdowns);
 
     const token = `${Date.now()}-${Math.random()}`;
     designQueryTokens.current[index] = token;
@@ -1165,7 +1169,9 @@ function Quotations() {
       const { _key, articleLabel, selectedDesignId, selectedColorId, ...rest } = item;
       return {
         ...rest,
+        rollId: rest.rollId || null,
         articleCode: rest.articleCode || rest.designation || '',
+        designation: rest.designation || rest.articleCode || '',
         unit: rest.unit || 'm',
         tvaRate: rest.tvaRate ?? 19,
         remiseRate: rest.remiseRate ?? 0,
