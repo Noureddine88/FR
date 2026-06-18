@@ -18,6 +18,9 @@ const RULE        = '#cdd5df';
 const INK         = '#1a2230';
 const MUTED       = '#6b7785';
 
+const MARGIN      = 20;
+const FOOTER_AREA = 70;
+
 const money = (value) =>
   Number(value || 0)
     .toFixed(3)
@@ -64,35 +67,41 @@ const amountInFrench = (amount) => {
   return `${numberToWords(dinars)} dinars${millimes ? ` et ${numberToWords(millimes)} millimes` : ''}`;
 };
 
-// ─── HEADER ──────────────────────────────────────────────────────────────────
-// FIX: company column is capped to the space left of the title box so it never
-//      bleeds over it. Title box is 55mm wide; gap is 4mm; margin is 20pt.
+const availableSpace = (doc, y) => {
+  const pageH = doc.internal.pageSize.getHeight();
+  return pageH - FOOTER_AREA - y;
+};
+
+const ensureSpace = (doc, y, needed) => {
+  if (availableSpace(doc, y) < needed) {
+    doc.addPage();
+    return MARGIN;
+  }
+  return y;
+};
+
 const drawHeader = (doc, { title, number, dateStr }) => {
   const pageW  = doc.internal.pageSize.getWidth();
-  const m      = 20;                    // left/right margin (pt)
-  const boxW   = 155;                   // title box width (pt)  ← slightly wider
-  const boxX   = pageW - m - boxW;
-  const compW  = boxX - m - 8;         // usable company column width
+  const boxW   = 155;
+  const boxX   = pageW - MARGIN - boxW;
+  const compW  = boxX - MARGIN - 8;
 
-  // Top accent bar
   doc.setFillColor(ACCENT);
   doc.rect(0, 0, pageW, 4, 'F');
 
-  // Company block – every text call is now capped to compW
   doc.setTextColor(ACCENT);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text(COMPANY.name, m, 19, { maxWidth: compW });
+  doc.text(COMPANY.name, MARGIN, 19, { maxWidth: compW });
 
   doc.setTextColor(MUTED);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
-  doc.text(COMPANY.tagline,                                         m, 27,  { maxWidth: compW });
-  doc.text(COMPANY.address,                                         m, 32,  { maxWidth: compW });
-  doc.text(`Tél : ${COMPANY.phone}   |   Email : ${COMPANY.email}`, m, 37,  { maxWidth: compW });
-  doc.text(`MF : ${COMPANY.mf}   |   BANK : ${COMPANY.bank}`,       m, 42,  { maxWidth: compW });
+  doc.text(COMPANY.tagline,                                         MARGIN, 27,  { maxWidth: compW });
+  doc.text(COMPANY.address,                                         MARGIN, 32,  { maxWidth: compW });
+  doc.text(`Tél : ${COMPANY.phone}   |   Email : ${COMPANY.email}`, MARGIN, 37,  { maxWidth: compW });
+  doc.text(`MF : ${COMPANY.mf}   |   BANK : ${COMPANY.bank}`,       MARGIN, 42,  { maxWidth: compW });
 
-  // Title box (right)
   doc.setFillColor(ACCENT);
   doc.roundedRect(boxX, 10, boxW, 38, 2, 2, 'F');
   doc.setTextColor('#ffffff');
@@ -104,23 +113,18 @@ const drawHeader = (doc, { title, number, dateStr }) => {
   doc.text(`N° ${number}`,    boxX + boxW / 2, 32, { align: 'center', maxWidth: boxW - 8 });
   doc.text(`Date : ${dateStr}`, boxX + boxW / 2, 40, { align: 'center', maxWidth: boxW - 8 });
 
-  // Separator
   doc.setDrawColor(RULE);
   doc.setLineWidth(0.4);
-  doc.line(m, 51, pageW - m, 51);
+  doc.line(MARGIN, 51, pageW - MARGIN, 51);
 
-  return 57;   // y after header
+  return 57;
 };
 
-// ─── CUSTOMER BLOCK ───────────────────────────────────────────────────────────
-// FIX: INFORMATIONS card uses a measured label column (labelColW) and a value
-//      column that fills the rest, both constrained to stay inside the card.
 const drawCustomerBlock = (doc, document, yStart) => {
   const pageW  = doc.internal.pageSize.getWidth();
-  const m      = 20;
   const gap    = 8;
-  const colW   = (pageW - 2 * m - gap) / 2;
-  const innerX = m + 5;
+  const colW   = (pageW - 2 * MARGIN - gap) / 2;
+  const innerX = MARGIN + 5;
   const textW  = colW - 10;
 
   const fullName     = document.customer?.fullName || document.customerName || 'Client de passage';
@@ -135,7 +139,6 @@ const drawCustomerBlock = (doc, document, yStart) => {
   if (phone)                 lines.push(`Tél : ${phone}`);
   if (addr)                  lines.push(String(addr));
 
-  // Measure text heights for dynamic card height
   doc.setFontSize(10);
   const nameLines = doc.splitTextToSize(fullName, textW);
   const nameH     = nameLines.length * 12;
@@ -145,47 +148,46 @@ const drawCustomerBlock = (doc, document, yStart) => {
   const linesTotalH = lineHs.reduce((s, h) => s + h, 0);
   const cardH       = Math.max(60, 16 + nameH + 8 + linesTotalH + 6);
 
-  // ── CLIENT card ──
+  yStart = ensureSpace(doc, yStart, cardH);
+  const actualY = yStart;
+
   doc.setFillColor(ACCENT_SOFT);
   doc.setDrawColor(RULE);
-  doc.roundedRect(m, yStart, colW, cardH, 2, 2, 'FD');
+  doc.roundedRect(MARGIN, actualY, colW, cardH, 2, 2, 'FD');
 
   doc.setTextColor(ACCENT);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.text('CLIENT', innerX, yStart + 6);
+  doc.text('CLIENT', innerX, actualY + 6);
 
   doc.setTextColor(INK);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text(nameLines, innerX, yStart + 16);
+  doc.text(nameLines, innerX, actualY + 16);
 
   doc.setTextColor(MUTED);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  let cy = yStart + 16 + nameH + 4;
+  let cy = actualY + 16 + nameH + 4;
   lines.forEach((t) => {
     const wrapped = doc.splitTextToSize(t, textW);
     doc.text(wrapped, innerX, cy);
     cy += wrapped.length * 9.6 + 1;
   });
 
-  // ── INFORMATIONS card ──
-  // FIX: label column is fixed at 62 pt; value column fills the rest of the
-  //      card interior so neither side overflows.
-  const x2        = m + colW + gap;
-  const cardInner = colW - 10;   // total usable interior width
-  const labelColW = 62;          // fixed label column
-  const valueColW = cardInner - labelColW - 4;  // remaining for value
+  const x2        = MARGIN + colW + gap;
+  const cardInner = colW - 10;
+  const labelColW = 62;
+  const valueColW = cardInner - labelColW - 4;
 
   doc.setFillColor('#ffffff');
   doc.setDrawColor(RULE);
-  doc.roundedRect(x2, yStart, colW, cardH, 2, 2, 'FD');
+  doc.roundedRect(x2, actualY, colW, cardH, 2, 2, 'FD');
 
   doc.setTextColor(ACCENT);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.text('INFORMATIONS', x2 + 5, yStart + 6);
+  doc.text('INFORMATIONS', x2 + 5, actualY + 6);
 
   const info = [
     ['Mode de règlement', document.paymentMethod || 'Espèces / Virement'],
@@ -196,28 +198,26 @@ const drawCustomerBlock = (doc, document, yStart) => {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   info.forEach(([k, v], i) => {
-    const iy = yStart + 16 + i * 12;
+    const iy = actualY + 16 + i * 12;
     doc.setTextColor(MUTED);
     doc.text(k, x2 + 5,              iy, { maxWidth: labelColW });
     doc.setTextColor(INK);
     doc.text(v, x2 + 5 + labelColW + 4, iy, { maxWidth: valueColW });
   });
 
-  return yStart + cardH + 8;
+  return actualY + cardH + 8;
 };
 
-// ─── TOTALS BOX ───────────────────────────────────────────────────────────────
-// FIX: box widened to 170 pt; label column fixed at 95 pt so "Net à payer" and
-//      "Total brut HT" are never clipped; value is right-aligned in remainder.
 const drawTotalsBox = (doc, lines, y) => {
   const pageW  = doc.internal.pageSize.getWidth();
-  const m      = 20;
-  const boxW   = 170;                   // was 140 — now wide enough for all labels
-  const boxX   = pageW - m - boxW;
+  const boxW   = 170;
+  const boxX   = pageW - MARGIN - boxW;
   const rowH   = 10;
   const h      = lines.length * rowH + 4;
-  const labelW = 95;                    // fixed label column
-  const valueW = boxW - labelW - 10;   // right column
+  const labelW = 95;
+  const valueW = boxW - labelW - 10;
+
+  y = ensureSpace(doc, y, h + 10);
 
   doc.setDrawColor(RULE);
   doc.setFillColor('#ffffff');
@@ -239,36 +239,32 @@ const drawTotalsBox = (doc, lines, y) => {
       doc.setFontSize(8);
     }
 
-    // Label — left aligned, constrained to labelW
     doc.text(line[0], boxX + 5, ly + 6, { maxWidth: labelW });
-    // Value — right aligned, constrained to valueW
     doc.text(line[1], boxX + boxW - 5, ly + 6, { align: 'right', maxWidth: valueW });
   });
 
   return y + h + 6;
 };
 
-// ─── FOOTER ──────────────────────────────────────────────────────────────────
 const drawFooter = (doc, { signatures = ['Signature client', 'Signature & cachet société'] } = {}) => {
   const pageH = doc.internal.pageSize.getHeight();
   const pageW = doc.internal.pageSize.getWidth();
-  const m     = 20;
   const fy    = pageH - 55;
+  const segW  = (pageW - 2 * MARGIN) / signatures.length;
 
-  const segW = (pageW - 2 * m) / signatures.length;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   signatures.forEach((label, i) => {
     doc.setTextColor(MUTED);
-    doc.text(label, m + i * segW + segW / 2, fy, { align: 'center' });
+    doc.text(label, MARGIN + i * segW + segW / 2, fy, { align: 'center' });
     doc.setDrawColor(RULE);
     doc.setLineWidth(0.4);
-    doc.line(m + i * segW + 10, fy + 22, m + i * segW + segW - 10, fy + 22);
+    doc.line(MARGIN + i * segW + 10, fy + 22, MARGIN + i * segW + segW - 10, fy + 22);
   });
 
   doc.setDrawColor(RULE);
   doc.setLineWidth(0.3);
-  doc.line(m, pageH - 16, pageW - m, pageH - 16);
+  doc.line(MARGIN, pageH - 16, pageW - MARGIN, pageH - 16);
   doc.setTextColor(MUTED);
   doc.setFontSize(7);
   doc.text(
@@ -277,7 +273,6 @@ const drawFooter = (doc, { signatures = ['Signature client', 'Signature & cachet
   );
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 const flexWidths = (avail, flexFactors) => {
   const totalFlex = flexFactors.reduce((s, v) => s + v, 0);
   return flexFactors.map((f) => Math.round((f / totalFlex) * avail));
@@ -294,67 +289,60 @@ const autoTableStyles = {
   styles: { cellPadding: 2, overflow: 'linebreak', fontSize: 7 },
 };
 
-// ─── DEVIS ───────────────────────────────────────────────────────────────────
-export const generateQuotationPdf = (quotation) => {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const y0  = drawHeader(doc, {
-    title:   'DEVIS',
-    number:  quotation.quotationNumber,
-    dateStr: date(quotation.createdAt),
+const PAGE_W = 595.28;
+
+const buildTable = (doc, columns, columnFlex, rows, startY) => {
+  const availW = PAGE_W - 2 * MARGIN;
+  const colW   = flexWidths(availW, columnFlex);
+  const colStyles = {};
+  columns.forEach((c, i) => {
+    colStyles[c.dataKey] = { cellWidth: colW[i], ...(c.align ? { halign: c.align } : {}) };
   });
-  let y = drawCustomerBlock(doc, quotation, y0 + 4);
-
-  const columns = [
-    { header: 'Code',        dataKey: 'code' },
-    { header: 'Désignation', dataKey: 'designation' },
-    { header: 'Qté',         dataKey: 'qty' },
-    { header: 'UN',          dataKey: 'unit' },
-    { header: 'P.U HT',     dataKey: 'puHt' },
-    { header: 'TVA',         dataKey: 'tva' },
-    { header: 'P.U TTC',    dataKey: 'puTtc' },
-    { header: 'Mt HT',       dataKey: 'totalHt' },
-  ];
-
-  const rows = (quotation.items || []).map((item) => ({
-    code:        formatArticleCode(item.articleCode),
-    designation: item.designation,
-    qty:         Number(item.quantity).toLocaleString('fr-FR'),
-    unit:        item.unit,
-    puHt:        money(item.unitPriceHt),
-    tva:         `${Number(item.tvaRate).toFixed(0)}%`,
-    puTtc:       money(unitPriceTtc(item.unitPriceHt, item.tvaRate)),
-    totalHt:     money(item.totalHt),
-  }));
-
-  const pageW  = doc.internal.pageSize.getWidth();
-  const margin = 20;
-  const availW = pageW - 2 * margin;
-  const qColW  = flexWidths(availW, [0.9, 3.4, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2]);
 
   doc.autoTable({
     columns,
     body: rows,
-    startY: y + 4,
+    startY,
     ...autoTableStyles,
     tableWidth: availW,
-    columnStyles: {
-      code:        { cellWidth: qColW[0] },
-      designation: { cellWidth: qColW[1] },
-      qty:         { cellWidth: qColW[2], halign: 'right' },
-      unit:        { cellWidth: qColW[3], halign: 'center' },
-      puHt:        { cellWidth: qColW[4], halign: 'right' },
-      tva:         { cellWidth: qColW[5], halign: 'right' },
-      puTtc:       { cellWidth: qColW[6], halign: 'right' },
-      totalHt:     { cellWidth: qColW[7], halign: 'right' },
-    },
+    columnStyles: colStyles,
   });
+};
+
+// ─── DEVIS ───────────────────────────────────────────────────────────────────
+export const generateQuotationPdf = (quotation) => {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+
+  let y = drawHeader(doc, { title: 'DEVIS', number: quotation.quotationNumber, dateStr: date(quotation.createdAt) });
+  y = drawCustomerBlock(doc, quotation, y + 4);
+
+  const columns = [
+    { header: 'Code',        dataKey: 'code' },
+    { header: 'Désignation', dataKey: 'designation' },
+    { header: 'Qté',         dataKey: 'qty',        align: 'right' },
+    { header: 'UN',          dataKey: 'unit',        align: 'center' },
+    { header: 'P.U HT',     dataKey: 'puHt',        align: 'right' },
+    { header: 'TVA',         dataKey: 'tva',         align: 'right' },
+    { header: 'P.U TTC',    dataKey: 'puTtc',       align: 'right' },
+    { header: 'Mt HT',       dataKey: 'totalHt',    align: 'right' },
+  ];
+
+  buildTable(doc, columns, [0.9, 3.4, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2],
+    (quotation.items || []).map((item) => ({
+      code:        formatArticleCode(item.articleCode),
+      designation: item.designation,
+      qty:         Number(item.quantity).toLocaleString('fr-FR'),
+      unit:        item.unit,
+      puHt:        money(item.unitPriceHt),
+      tva:         `${Number(item.tvaRate).toFixed(0)}%`,
+      puTtc:       money(unitPriceTtc(item.unitPriceHt, item.tvaRate)),
+      totalHt:     money(item.totalHt),
+    })), y + 4);
 
   y = doc.lastAutoTable.finalY + 8;
 
   const totalRemise = (quotation.items || []).reduce(
-    (s, i) => s + Number(i.unitPriceHt) * Number(i.quantity) * (Number(i.remiseRate || 0) / 100),
-    0,
-  );
+    (s, i) => s + Number(i.unitPriceHt) * Number(i.quantity) * (Number(i.remiseRate || 0) / 100), 0);
 
   y = drawTotalsBox(doc, [
     ['Total brut HT', `${money(Number(quotation.totalHt) + totalRemise)} TND`],
@@ -365,79 +353,54 @@ export const generateQuotationPdf = (quotation) => {
     ['Net à payer',   `${money(quotation.netToPay)} TND`],
   ], y);
 
-  const pageH       = doc.internal.pageSize.getHeight();
-  const footerStart = pageH - 75;
-  if (y > footerStart) doc.addPage();
+  const pageW = PAGE_W;
+  y = ensureSpace(doc, y, 50);
 
   doc.setTextColor(INK);
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
-  doc.text(
-    `Arrêté le présent devis à la somme de : ${amountInFrench(quotation.netToPay)}.`,
-    margin, y + 4, { maxWidth: pageW - 2 * margin },
-  );
+  doc.text(`Arrêté le présent devis à la somme de : ${amountInFrench(quotation.netToPay)}.`,
+    MARGIN, y + 4, { maxWidth: pageW - 2 * MARGIN });
 
   if (quotation.notes) {
     doc.setTextColor(MUTED);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.text(`Notes : ${quotation.notes}`, margin, y + 14, { maxWidth: pageW - 2 * margin });
+    doc.text(`Notes : ${quotation.notes}`, MARGIN, y + 14, { maxWidth: pageW - 2 * MARGIN });
   }
 
+  y = ensureSpace(doc, y + 20, 20);
   doc.setTextColor(MUTED);
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(6.5);
-  doc.text(
-    "Devis valable 30 jours à compter de sa date d'émission.",
-    margin, pageH - 62, { maxWidth: pageW - 2 * margin },
-  );
+  doc.text("Devis valable 30 jours à compter de sa date d'émission.",
+    MARGIN, doc.internal.pageSize.getHeight() - 62, { maxWidth: pageW - 2 * MARGIN });
 
-  drawFooter(doc, { signatures: ['Bon pour accord (client)', 'Signature & cachet société'] });
+  drawFooter(doc);
   return doc;
 };
 
 // ─── BON DE LIVRAISON ────────────────────────────────────────────────────────
 export const generateDeliveryPdf = (delivery) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const y0  = drawHeader(doc, {
-    title:   'BON DE LIVRAISON',
-    number:  delivery.deliveryNumber,
-    dateStr: date(delivery.createdAt),
-  });
-  let y = drawCustomerBlock(doc, delivery, y0 + 4);
+
+  let y = drawHeader(doc, { title: 'BON DE LIVRAISON', number: delivery.deliveryNumber, dateStr: date(delivery.createdAt) });
+  y = drawCustomerBlock(doc, delivery, y + 4);
 
   const columns = [
     { header: 'Code',        dataKey: 'code' },
     { header: 'Désignation', dataKey: 'designation' },
-    { header: 'Qté',         dataKey: 'qty' },
-    { header: 'UN',          dataKey: 'unit' },
+    { header: 'Qté',         dataKey: 'qty',  align: 'right' },
+    { header: 'UN',          dataKey: 'unit',  align: 'center' },
   ];
 
-  const rows = (delivery.items || []).map((item) => ({
-    code:        formatArticleCode(item.articleCode),
-    designation: item.designation,
-    qty:         Number(item.quantity).toLocaleString('fr-FR'),
-    unit:        item.unit,
-  }));
-
-  const pageW  = doc.internal.pageSize.getWidth();
-  const margin = 20;
-  const availW = pageW - 2 * margin;
-  const dColW  = flexWidths(availW, [1.0, 4.5, 0.8, 0.7]);
-
-  doc.autoTable({
-    columns,
-    body: rows,
-    startY: y + 4,
-    ...autoTableStyles,
-    tableWidth: availW,
-    columnStyles: {
-      code:        { cellWidth: dColW[0] },
-      designation: { cellWidth: dColW[1] },
-      qty:         { cellWidth: dColW[2], halign: 'right' },
-      unit:        { cellWidth: dColW[3], halign: 'center' },
-    },
-  });
+  buildTable(doc, columns, [1.0, 4.5, 0.8, 0.7],
+    (delivery.items || []).map((item) => ({
+      code:        formatArticleCode(item.articleCode),
+      designation: item.designation,
+      qty:         Number(item.quantity).toLocaleString('fr-FR'),
+      unit:        item.unit,
+    })), y + 4);
 
   y = doc.lastAutoTable.finalY + 8;
 
@@ -459,6 +422,7 @@ export const generateDeliveryPdf = (delivery) => {
   const stampDuty   = Number(delivery.quotation?.stampDuty ?? 1);
   const netToPay    = totalHt + totalTva + stampDuty;
 
+  const pageW = PAGE_W;
   y = drawTotalsBox(doc, [
     ['Total brut HT', `${money(totalHt + totalRemise)} TND`],
     ['Total remise',  `- ${money(totalRemise)} TND`],
@@ -468,19 +432,19 @@ export const generateDeliveryPdf = (delivery) => {
     ['Net à payer',   `${money(netToPay)} TND`],
   ], y);
 
+  y = ensureSpace(doc, y, 30);
+
   doc.setTextColor(INK);
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
-  doc.text(
-    `Arrêté le présent bon à la somme de : ${amountInFrench(netToPay)}.`,
-    margin, y + 4, { maxWidth: pageW - 2 * margin },
-  );
+  doc.text(`Arrêté le présent bon à la somme de : ${amountInFrench(netToPay)}.`,
+    MARGIN, y + 4, { maxWidth: pageW - 2 * MARGIN });
 
   if (delivery.notes) {
     doc.setTextColor(MUTED);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.text(`Notes : ${delivery.notes}`, margin, y + 14, { maxWidth: pageW - 2 * margin });
+    doc.text(`Notes : ${delivery.notes}`, MARGIN, y + 14, { maxWidth: pageW - 2 * MARGIN });
   }
 
   drawFooter(doc);
@@ -490,65 +454,39 @@ export const generateDeliveryPdf = (delivery) => {
 // ─── FACTURE ─────────────────────────────────────────────────────────────────
 export const generateInvoicePdf = (invoice) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const y0  = drawHeader(doc, {
-    title:   'FACTURE',
-    number:  invoice.invoiceNumber,
-    dateStr: date(invoice.createdAt),
-  });
-  let y = drawCustomerBlock(doc, invoice, y0 + 4);
+
+  let y = drawHeader(doc, { title: 'FACTURE', number: invoice.invoiceNumber, dateStr: date(invoice.createdAt) });
+  y = drawCustomerBlock(doc, invoice, y + 4);
 
   const columns = [
     { header: 'Code',        dataKey: 'code' },
     { header: 'Désignation', dataKey: 'designation' },
-    { header: 'Qté',         dataKey: 'qty' },
-    { header: 'UN',          dataKey: 'unit' },
-    { header: 'P.U HT',     dataKey: 'puHt' },
-    { header: 'TVA',         dataKey: 'tva' },
-    { header: 'P.U TTC',    dataKey: 'puTtc' },
-    { header: 'Mt HT',       dataKey: 'totalHt' },
+    { header: 'Qté',         dataKey: 'qty',     align: 'right' },
+    { header: 'UN',          dataKey: 'unit',     align: 'center' },
+    { header: 'P.U HT',     dataKey: 'puHt',     align: 'right' },
+    { header: 'TVA',         dataKey: 'tva',      align: 'right' },
+    { header: 'P.U TTC',    dataKey: 'puTtc',    align: 'right' },
+    { header: 'Mt HT',       dataKey: 'totalHt', align: 'right' },
   ];
 
-  const rows = (invoice.items || []).map((item) => ({
-    code:        formatArticleCode(item.articleCode),
-    designation: item.designation,
-    qty:         Number(item.quantity).toLocaleString('fr-FR'),
-    unit:        item.unit,
-    puHt:        money(item.unitPriceHt),
-    tva:         `${Number(item.tvaRate ?? 19).toFixed(0)}%`,
-    puTtc:       money(item.unitPriceTtc || unitPriceTtc(item.unitPriceHt, item.tvaRate)),
-    totalHt:     money(item.totalHt),
-  }));
-
-  const pageW  = doc.internal.pageSize.getWidth();
-  const margin = 20;
-  const availW = pageW - 2 * margin;
-  const iColW  = flexWidths(availW, [0.9, 3.4, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2]);
-
-  doc.autoTable({
-    columns,
-    body: rows,
-    startY: y + 4,
-    ...autoTableStyles,
-    tableWidth: availW,
-    columnStyles: {
-      code:        { cellWidth: iColW[0] },
-      designation: { cellWidth: iColW[1] },
-      qty:         { cellWidth: iColW[2], halign: 'right' },
-      unit:        { cellWidth: iColW[3], halign: 'center' },
-      puHt:        { cellWidth: iColW[4], halign: 'right' },
-      tva:         { cellWidth: iColW[5], halign: 'right' },
-      puTtc:       { cellWidth: iColW[6], halign: 'right' },
-      totalHt:     { cellWidth: iColW[7], halign: 'right' },
-    },
-  });
+  buildTable(doc, columns, [0.9, 3.4, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2],
+    (invoice.items || []).map((item) => ({
+      code:        formatArticleCode(item.articleCode),
+      designation: item.designation,
+      qty:         Number(item.quantity).toLocaleString('fr-FR'),
+      unit:        item.unit,
+      puHt:        money(item.unitPriceHt),
+      tva:         `${Number(item.tvaRate ?? 19).toFixed(0)}%`,
+      puTtc:       money(item.unitPriceTtc || unitPriceTtc(item.unitPriceHt, item.tvaRate)),
+      totalHt:     money(item.totalHt),
+    })), y + 4);
 
   y = doc.lastAutoTable.finalY + 8;
 
   const totalRemise = (invoice.items || []).reduce(
-    (s, i) => s + Number(i.unitPriceHt) * Number(i.quantity) * (Number(i.remiseRate || 0) / 100),
-    0,
-  );
+    (s, i) => s + Number(i.unitPriceHt) * Number(i.quantity) * (Number(i.remiseRate || 0) / 100), 0);
 
+  const pageW = PAGE_W;
   y = drawTotalsBox(doc, [
     ['Total brut HT', `${money(Number(invoice.totalHt) + totalRemise)} TND`],
     ['Total remise',  `- ${money(totalRemise)} TND`],
@@ -558,28 +496,24 @@ export const generateInvoicePdf = (invoice) => {
     ['NET À PAYER',   `${money(invoice.netToPay)} TND`],
   ], y);
 
-  const pageH       = doc.internal.pageSize.getHeight();
-  const footerStart = pageH - 75;
-  if (y > footerStart) doc.addPage();
+  y = ensureSpace(doc, y, 40);
 
   doc.setTextColor(INK);
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
-  doc.text(
-    `Arrêtée la présente facture à la somme de : ${amountInFrench(invoice.netToPay)}.`,
-    margin, y + 4, { maxWidth: pageW - 2 * margin },
-  );
+  doc.text(`Arrêtée la présente facture à la somme de : ${amountInFrench(invoice.netToPay)}.`,
+    MARGIN, y + 4, { maxWidth: pageW - 2 * MARGIN });
 
   if (invoice.notes) {
     doc.setTextColor(MUTED);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.text(`Notes : ${invoice.notes}`, margin, y + 14, { maxWidth: pageW - 2 * margin });
+    doc.text(`Notes : ${invoice.notes}`, MARGIN, y + 14, { maxWidth: pageW - 2 * MARGIN });
   }
   if (invoice.mfNumber) {
     doc.setTextColor(MUTED);
     doc.setFontSize(7);
-    doc.text(`MF client : ${invoice.mfNumber}`, margin, y + 22, { maxWidth: pageW - 2 * margin });
+    doc.text(`MF client : ${invoice.mfNumber}`, MARGIN, y + 22, { maxWidth: pageW - 2 * MARGIN });
   }
 
   drawFooter(doc);

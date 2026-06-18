@@ -1019,13 +1019,13 @@ function Quotations() {
   const customerQueryTokenRef = useRef('');
   const [form, setForm] = useState({ customerId: '', customerName: '', customerPhone: '', customerAddress: '', customerMatriculeFiscale: '', notes: '' });
   const itemKeyRef = useRef(1);
-  const [items, setItems] = useState([{ _key: 0, rollId: '', articleCode: '', articleLabel: '', designation: '', quantity: '', unit: 'm', unitPriceHt: '', remiseRate: 0, tvaRate: 19, selectedDesignId: '', selectedColorId: '' }]);
+  const [items, setItems] = useState([{ _key: 0, rollId: '', articleCode: '', articleLabel: '', designation: '', quantity: '', unit: 'm', unitPriceHt: '', unitPriceTtc: '', remiseRate: 0, tvaRate: 19, selectedDesignId: '', selectedColorId: '' }]);
   const [message, setMessage] = useState('');
   const [editingId, setEditingId] = useState(null);
 
   const setItem = (index, values) => setItems((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...values } : item)));
   const addItem = () => {
-    setItems((prev) => [...prev, { _key: ++itemKeyRef.current, rollId: '', articleCode: '', articleLabel: '', designation: '', quantity: '', unit: 'm', unitPriceHt: '', remiseRate: 0, tvaRate: 19, selectedDesignId: '', selectedColorId: '' }]);
+    setItems((prev) => [...prev, { _key: ++itemKeyRef.current, rollId: '', articleCode: '', articleLabel: '', designation: '', quantity: '', unit: 'm', unitPriceHt: '', unitPriceTtc: '', remiseRate: 0, tvaRate: 19, selectedDesignId: '', selectedColorId: '' }]);
     setDesignSearches((prev) => [...prev, '']);
     setDesignDropdowns((prev) => [...prev, false]);
     setDesignSuggestions((prev) => [...prev, []]);
@@ -1042,7 +1042,7 @@ function Quotations() {
     setForm({ customerId: '', customerName: '', customerPhone: '', customerAddress: '', customerMatriculeFiscale: '', notes: '' });
     setCustomerSearch('');
     itemKeyRef.current = 1;
-    setItems([{ _key: 0, rollId: '', articleCode: '', articleLabel: '', designation: '', quantity: '', unit: 'm', unitPriceHt: '', remiseRate: 0, tvaRate: 19, selectedDesignId: '', selectedColorId: '' }]);
+    setItems([{ _key: 0, rollId: '', articleCode: '', articleLabel: '', designation: '', quantity: '', unit: 'm', unitPriceHt: '', unitPriceTtc: '', remiseRate: 0, tvaRate: 19, selectedDesignId: '', selectedColorId: '' }]);
     setDesignSearches(['']);
     setDesignDropdowns([false]);
     setDesignSuggestions([[]]);
@@ -1063,6 +1063,8 @@ function Quotations() {
       const roll = item.roll;
       const color = roll?.color;
       const design = color?.design;
+      const ht = Number(item.unitPriceHt || 0);
+      const tva = Number(item.tvaRate ?? 19) / 100;
       return {
         _key: i,
         rollId: item.rollId || '',
@@ -1072,6 +1074,7 @@ function Quotations() {
         quantity: String(item.quantity || ''),
         unit: item.unit || 'm',
         unitPriceHt: String(item.unitPriceHt || ''),
+        unitPriceTtc: ht ? (ht * (1 + tva)).toFixed(3) : '',
         remiseRate: item.remiseRate ?? 0,
         tvaRate: item.tvaRate ?? 19,
         selectedDesignId: design?.id || '',
@@ -1117,7 +1120,7 @@ function Quotations() {
     setDesignSearches(newSearches);
 
     if (!value.trim()) {
-      setItem(index, { selectedDesignId: '', selectedColorId: '', rollId: '', articleCode: '', articleLabel: '', designation: '', unitPriceHt: '' });
+      setItem(index, { selectedDesignId: '', selectedColorId: '', rollId: '', articleCode: '', articleLabel: '', designation: '', unitPriceHt: '', unitPriceTtc: '' });
       const newSuggestions = [...designSuggestions];
       newSuggestions[index] = [];
       setDesignSuggestions(newSuggestions);
@@ -1171,7 +1174,7 @@ function Quotations() {
     newDropdowns[index] = false;
     setDesignDropdowns(newDropdowns);
 
-    setItem(index, { selectedDesignId: design.id, selectedColorId: '', rollId: '', articleCode: formatArticleCode(design.designCode), articleLabel: '', designation: '', unitPriceHt: '' });
+    setItem(index, { selectedDesignId: design.id, selectedColorId: '', rollId: '', articleCode: formatArticleCode(design.designCode), articleLabel: '', designation: '', unitPriceHt: '', unitPriceTtc: '' });
   };
 
   // Build available colors for each item based on selected design
@@ -1183,7 +1186,7 @@ function Quotations() {
 
   const selectColor = async (index, colorId) => {
     if (!colorId) {
-      setItem(index, { selectedColorId: '', rollId: '', articleLabel: '', designation: '', unitPriceHt: '' });
+      setItem(index, { selectedColorId: '', rollId: '', articleLabel: '', designation: '', unitPriceHt: '', unitPriceTtc: '' });
       return;
     }
     // Fetch a roll for this color
@@ -1193,12 +1196,16 @@ function Quotations() {
       const roll = rolls[0];
       if (roll) {
         const colorLabel = roll.color?.displayName || roll.color?.code || '';
+        const tva = Number(items[index]?.tvaRate ?? 19);
+        const ht = roll.sellingPrice || '';
+        const ttc = ht ? (Number(ht) * (1 + tva / 100)).toFixed(3) : '';
         setItem(index, {
           selectedColorId: colorId,
           rollId: roll.id,
           articleLabel: roll.suggestionLabel || `${formatArticleCode(roll.articleCode)} - ${roll.color?.design?.name || ''} - ${colorLabel}`,
           designation: roll ? `${roll.color?.design?.name || ''} - ${colorLabel}`.trim() : '',
-          unitPriceHt: roll.sellingPrice || '',
+          unitPriceHt: ht,
+          unitPriceTtc: ttc,
         });
       } else {
         // No roll found, just store the color selection
@@ -1212,6 +1219,7 @@ function Quotations() {
           articleLabel: `${desName} - ${colorLabel}`,
           designation: `${desName} - ${colorLabel}`,
           unitPriceHt: '',
+          unitPriceTtc: '',
         });
       }
     } catch {
@@ -1223,7 +1231,7 @@ function Quotations() {
     event.preventDefault();
     setMessage('');
     const cleanItems = items.map((item) => {
-      const { _key, articleLabel, selectedDesignId, selectedColorId, ...rest } = item;
+      const { _key, articleLabel, selectedDesignId, selectedColorId, unitPriceTtc, ...rest } = item;
       return {
         ...rest,
         rollId: rest.rollId || null,
@@ -1445,7 +1453,7 @@ function Quotations() {
         <div className="table-wrap">
           <table className="table align-middle">
             <thead>
-              <tr><th>Design</th><th>Couleur</th><th>Qté</th><th>PU HT</th><th>Remise %</th><th>TVA %</th><th /></tr>
+              <tr><th>Design</th><th>Couleur</th><th>Qté</th><th>PU HT</th><th>PU TTC</th><th>Remise %</th><th>TVA %</th><th /></tr>
             </thead>
             <tbody>
               {items.map((item, index) => {
@@ -1509,9 +1517,10 @@ function Quotations() {
                     <Autocomplete placeholder="Sélectionner couleur" options={colors} getOptionLabel={(c) => `${c.displayName || c.code}${c.status ? ` [${statusLabel[c.status] || c.status}]` : ''}`} getOptionValue={(c) => c.id} value={item.selectedColorId} onChange={(v) => selectColor(index, v)} disabled={!item.selectedDesignId} />
                   </td>
                   <td><input className="form-control" type="number" step="0.01" value={item.quantity} onChange={(e) => setItem(index, { quantity: e.target.value })} required /></td>
-                  <td><input className="form-control" type="number" step="0.001" value={item.unitPriceHt} onChange={(e) => setItem(index, { unitPriceHt: e.target.value })} /></td>
+                  <td><input className="form-control" type="number" step="0.001" value={item.unitPriceHt} onChange={(e) => { const v = e.target.value; const tva = Number(item.tvaRate ?? 19) / 100; setItem(index, { unitPriceHt: v, unitPriceTtc: v ? (Number(v) * (1 + tva)).toFixed(3) : '' }); }} /></td>
+                  <td><input className="form-control" type="number" step="0.001" value={item.unitPriceTtc} onChange={(e) => { const v = e.target.value; const tva = Number(item.tvaRate ?? 19) / 100; setItem(index, { unitPriceTtc: v, unitPriceHt: v ? (Number(v) / (1 + tva)).toFixed(3) : '' }); }} /></td>
                   <td><input className="form-control" type="number" step="0.01" min="0" max="100" value={item.remiseRate} onChange={(e) => setItem(index, { remiseRate: e.target.value })} /></td>
-                  <td><input className="form-control" type="number" step="0.01" value={item.tvaRate} onChange={(e) => setItem(index, { tvaRate: e.target.value })} /></td>
+                  <td><input className="form-control" type="number" step="0.01" value={item.tvaRate} onChange={(e) => { const v = e.target.value; const ht = item.unitPriceHt; setItem(index, { tvaRate: v, unitPriceTtc: ht ? (Number(ht) * (1 + Number(v ?? 19) / 100)).toFixed(3) : '' }); }} /></td>
                   <td><button className="btn btn-sm btn-outline-danger" type="button" onClick={() => removeItem(index)} disabled={items.length === 1}>Supprimer</button></td>
                 </tr>);
               })}

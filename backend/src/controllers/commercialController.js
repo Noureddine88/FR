@@ -250,6 +250,96 @@ export const createDeliveryFromQuotation = asyncHandler(async (req, res) => {
   res.status(201).json(delivery);
 });
 
+const consumeRollsForItem = async (tx, item, deliveryNumber) => {
+  const articleCodeNum = parseInt(item.articleCode, 10);
+  if (isNaN(articleCodeNum))
+    throw Object.assign(new Error(`Code article invalide pour "${item.designation}"`), { statusCode: 400 });
+
+  let needed = item.quantity;
+  const consumed = []; // { roll, taken }
+  const colorIds = new Set();
+
+  // If a roll is pre-assigned, try it first
+  if (item.rollId) {
+    const roll = await tx.roll.findUnique({ where: { id: item.rollId } });
+    if (roll && roll.remainingMeters > 0) {
+      const taken = Math.min(needed, roll.remainingMeters);
+      consumed.push({ roll, taken });
+      needed -= taken;
+      colorIds.add(roll.colorId);
+    }
+  }
+
+  // If still needed, find more rolls
+  if (needed > 0) {
+    const rolls = await tx.roll.findMany({
+      where: {
+        articleCode: articleCodeNum,
+        remainingMeters: { gt: 0 },
+        ...(item.rollId ? { id: { not: item.rollId } } : {}),
+      },
+      orderBy: { remainingMeters: 'desc' },
+    });
+
+    for (const roll of rolls) {
+      if (needed <= 0) break;
+      const taken = Math.min(needed, roll.remainingMeters);
+      consumed.push({ roll, taken });
+      needed -= taken;
+      colorIds.add(roll.colorId);
+    }
+  }
+
+  if (needed > 0) {
+    const totalTaken = consumed.reduce((s, c) => s + c.taken, 0);
+    const message = item.rollId
+      ? `Stock insuffisant pour l'article ${item.articleCode} (${item.designation}) : ${totalTaken.toFixed(1)}m disponible(s), besoin de ${item.quantity}m`
+      : `Stock insuffisant pour le code article ${item.articleCode} (${item.designation}) : ${totalTaken.toFixed(1)}m disponible(s), besoin de ${item.quantity}m`;
+    throw Object.assign(new Error(message), { statusCode: 400 });
+  }
+
+  // Apply deductions
+  for (let i = 0; i < consumed.length; i++) {
+    const { roll, taken } = consumed[i];
+
+    if (i === 0) {
+      // Update original DN item with the first roll
+      await tx.deliveryNoteItem.update({
+        where: { id: item.id },
+        data: { rollId: roll.id, quantity: taken },
+      });
+    } else {
+      // Create new DN item for additional rolls
+      await tx.deliveryNoteItem.create({
+        data: {
+          deliveryNoteId: item.deliveryNoteId,
+          rollId: roll.id,
+          articleCode: item.articleCode,
+          designation: `${item.designation} (complément)`,
+          quantity: taken,
+          unit: item.unit,
+        },
+      });
+    }
+
+    const newRemaining = roll.remainingMeters - taken;
+    if (newRemaining <= 0) {
+      await tx.roll.delete({ where: { id: roll.id } });
+    } else {
+      await tx.roll.update({
+        where: { id: roll.id },
+        data: { remainingMeters: newRemaining },
+      });
+    }
+
+    await tx.stockMovement.create({
+      data: { type: 'EXIT', quantity: taken, reason: `Bon de livraison ${deliveryNumber}`, rollId: roll.id },
+    });
+  }
+
+  return { colorIds, firstRollId: consumed.length > 0 ? consumed[0].roll.id : null };
+};
+
 export const acceptDeliveryNote = asyncHandler(async (req, res) => {
   const delivery = await prisma.$transaction(async (tx) => {
     const current = await tx.deliveryNote.findUnique({
@@ -260,42 +350,23 @@ export const acceptDeliveryNote = asyncHandler(async (req, res) => {
     if (current.status === 'ACCEPTED')
       throw Object.assign(new Error('Ce bon de livraison est déjà accepté'), { statusCode: 409 });
 
-    for (const item of current.items) {
-      let roll = null;
+    const allColorIds = new Set();
 
-      if (item.rollId) {
-        roll = await tx.roll.findUnique({ where: { id: item.rollId } });
-        if (!roll) throw Object.assign(new Error(`Rouleau introuvable pour l'article ${item.articleCode}`), { statusCode: 404 });
-      } else {
-        const articleCodeNum = parseInt(item.articleCode, 10);
-        if (isNaN(articleCodeNum))
-          throw Object.assign(new Error(`Code article invalide pour "${item.designation}" — impossible de trouver un rouleau en stock`), { statusCode: 400 });
+    for (let idx = 0; idx < current.items.length; idx++) {
+      const item = current.items[idx];
+      const { colorIds, firstRollId } = await consumeRollsForItem(tx, item, current.deliveryNumber);
+      for (const cid of colorIds) allColorIds.add(cid);
 
-        roll = await tx.roll.findFirst({
-          where: { articleCode: articleCodeNum, remainingMeters: { gte: item.quantity } },
-          orderBy: { remainingMeters: 'desc' },
-        });
-        if (!roll) {
-          const anyRoll = await tx.roll.findFirst({ where: { articleCode: articleCodeNum } });
-          if (!anyRoll)
-            throw Object.assign(new Error(`Aucun rouleau trouvé pour le code article ${item.articleCode} (${item.designation})`), { statusCode: 404 });
-          throw Object.assign(new Error(`Stock insuffisant pour le code article ${item.articleCode} (${item.designation}) : il ne reste que ${anyRoll.remainingMeters} mètres, besoin de ${item.quantity}`), { statusCode: 400 });
-        }
-
-        await tx.deliveryNoteItem.update({ where: { id: item.id }, data: { rollId: roll.id } });
-        if (current.quotation) {
-          const qItem = current.quotation.items.find((qi) => qi.articleCode === item.articleCode && !qi.rollId);
-          if (qItem) await tx.quotationItem.update({ where: { id: qItem.id }, data: { rollId: roll.id } });
-        }
+      // Update quotation item if it exists and has no roll assigned
+      if (current.quotation && firstRollId) {
+        const qItem = current.quotation.items.find((qi) => qi.articleCode === item.articleCode && !qi.rollId);
+        if (qItem) await tx.quotationItem.update({ where: { id: qItem.id }, data: { rollId: firstRollId } });
       }
+    }
 
-      if (roll.remainingMeters < item.quantity)
-        throw Object.assign(new Error(`Stock insuffisant pour l'article ${item.articleCode} : il ne reste que ${roll.remainingMeters} mètres`), { statusCode: 400 });
-
-      await tx.roll.update({ where: { id: roll.id }, data: { remainingMeters: { decrement: item.quantity } } });
-      await tx.stockMovement.create({
-        data: { type: 'EXIT', quantity: item.quantity, reason: `Bon de livraison ${current.deliveryNumber}`, rollId: roll.id },
-      });
+    // Recalculate totals inside the transaction for accuracy
+    for (const colorId of allColorIds) {
+      await recalculateColorTotals(colorId, tx);
     }
 
     return tx.deliveryNote.update({
@@ -304,21 +375,6 @@ export const acceptDeliveryNote = asyncHandler(async (req, res) => {
       include: includeDelivery,
     });
   });
-
-  // Recalculate stock totals AFTER the transaction to avoid interactive transaction timeouts.
-  // We need to update derived totals (roll->color->design->reference).
-  if (delivery?.items?.length) {
-    const uniqueColorIds = new Set();
-    for (const dItem of delivery.items) {
-      if (!dItem.rollId) continue;
-      // We only need colorId; load roll outside transaction.
-      const roll = await prisma.roll.findUnique({ where: { id: dItem.rollId }, select: { colorId: true } });
-      if (roll?.colorId) uniqueColorIds.add(roll.colorId);
-    }
-    for (const colorId of uniqueColorIds) {
-      await recalculateColorTotals(colorId, prisma);
-    }
-  }
 
   res.json(delivery);
 });
