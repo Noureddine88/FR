@@ -227,6 +227,18 @@ const drawFooter = (doc, { signatures = ['Signature client', 'Signature & cachet
   );
 };
 
+const autoTableStyles = {
+  theme: 'grid',
+  headStyles: { fillColor: ACCENT, textColor: '#ffffff', fontStyle: 'bold', fontSize: 7 },
+  bodyStyles: { fontSize: 7, textColor: INK },
+  alternateRowStyles: { fillColor: ACCENT_SOFT },
+  margin: { left: 20, right: 20 },
+  tableLineColor: RULE,
+  tableLineWidth: 0.3,
+  styles: { cellPadding: 2, overflow: 'linebreak', fontSize: 7 },
+  tableWidth: 'auto',
+};
+
 export const generateQuotationPdf = (quotation) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const y0 = drawHeader(doc, {
@@ -244,7 +256,7 @@ export const generateQuotationPdf = (quotation) => {
     { header: 'P.U HT', dataKey: 'puHt' },
     { header: 'TVA', dataKey: 'tva' },
     { header: 'P.U TTC', dataKey: 'puTtc' },
-    { header: 'Montant HT', dataKey: 'totalHt' },
+    { header: 'Mt HT', dataKey: 'totalHt' },
   ];
 
   const rows = (quotation.items || []).map((item) => ({
@@ -258,27 +270,24 @@ export const generateQuotationPdf = (quotation) => {
     totalHt: money(item.totalHt),
   }));
 
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 20;
+  const availW = pageW - 2 * margin;
+
   doc.autoTable({
     columns,
     body: rows,
     startY: y + 4,
-    theme: 'grid',
-    headStyles: { fillColor: ACCENT, textColor: '#ffffff', fontStyle: 'bold', fontSize: 8 },
-    bodyStyles: { fontSize: 8, textColor: INK },
-    alternateRowStyles: { fillColor: ACCENT_SOFT },
-    margin: { left: 20, right: 20 },
-    tableLineColor: RULE,
-    tableLineWidth: 0.3,
-    styles: { cellPadding: 3 },
+    ...autoTableStyles,
     columnStyles: {
-      code: { cellWidth: 40 },
-      designation: { cellWidth: 'auto' },
-      qty: { cellWidth: 30, halign: 'right' },
-      unit: { cellWidth: 25, halign: 'center' },
-      puHt: { cellWidth: 45, halign: 'right' },
-      tva: { cellWidth: 30, halign: 'right' },
-      puTtc: { cellWidth: 45, halign: 'right' },
-      totalHt: { cellWidth: 50, halign: 'right' },
+      code: { cellWidth: 30 },
+      designation: { cellWidth: availW - 295 },
+      qty: { cellWidth: 28, halign: 'right' },
+      unit: { cellWidth: 22, halign: 'center' },
+      puHt: { cellWidth: 42, halign: 'right' },
+      tva: { cellWidth: 26, halign: 'right' },
+      puTtc: { cellWidth: 42, halign: 'right' },
+      totalHt: { cellWidth: 45, halign: 'right' },
     },
   });
 
@@ -298,23 +307,27 @@ export const generateQuotationPdf = (quotation) => {
     ['Net à payer', `${money(quotation.netToPay)} TND`],
   ], y);
 
+  const pageH = doc.internal.pageSize.getHeight();
+  const footerStart = pageH - 75;
+
+  if (y > footerStart) doc.addPage();
+
   doc.setTextColor(INK);
   doc.setFont('helvetica', 'italic');
-  doc.setFontSize(9);
-  doc.text(`Arrêté le présent devis à la somme de : ${amountInFrench(quotation.netToPay)}.`, 20, y + 4);
+  doc.setFontSize(8);
+  doc.text(`Arrêté le présent devis à la somme de : ${amountInFrench(quotation.netToPay)}.`, margin, y + 4);
 
   if (quotation.notes) {
     doc.setTextColor(MUTED);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(`Notes : ${quotation.notes}`, 20, y + 14);
-    y += 10;
+    doc.setFontSize(7);
+    doc.text(`Notes : ${quotation.notes}`, margin, y + 14);
   }
 
   doc.setTextColor(MUTED);
   doc.setFont('helvetica', 'italic');
-  doc.setFontSize(7);
-  doc.text("Devis valable 30 jours à compter de sa date d'émission.", 20, doc.internal.pageSize.getHeight() - 70);
+  doc.setFontSize(6.5);
+  doc.text("Devis valable 30 jours à compter de sa date d'émission.", margin, doc.internal.pageSize.getHeight() - 62);
 
   drawFooter(doc, { signatures: ['Bon pour accord (client)', 'Signature & cachet société'] });
 
@@ -344,23 +357,20 @@ export const generateDeliveryPdf = (delivery) => {
     unit: item.unit,
   }));
 
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 20;
+  const availW = pageW - 2 * margin;
+
   doc.autoTable({
     columns,
     body: rows,
     startY: y + 4,
-    theme: 'grid',
-    headStyles: { fillColor: ACCENT, textColor: '#ffffff', fontStyle: 'bold', fontSize: 8 },
-    bodyStyles: { fontSize: 8, textColor: INK },
-    alternateRowStyles: { fillColor: ACCENT_SOFT },
-    margin: { left: 20, right: 20 },
-    tableLineColor: RULE,
-    tableLineWidth: 0.3,
-    styles: { cellPadding: 3 },
+    ...autoTableStyles,
     columnStyles: {
-      code: { cellWidth: 50 },
-      designation: { cellWidth: 'auto' },
-      qty: { cellWidth: 40, halign: 'right' },
-      unit: { cellWidth: 35, halign: 'center' },
+      code: { cellWidth: 45 },
+      designation: { cellWidth: availW - 120 },
+      qty: { cellWidth: 38, halign: 'right' },
+      unit: { cellWidth: 30, halign: 'center' },
     },
   });
 
@@ -429,7 +439,7 @@ export const generateInvoicePdf = (invoice) => {
     { header: 'P.U HT', dataKey: 'puHt' },
     { header: 'TVA', dataKey: 'tva' },
     { header: 'P.U TTC', dataKey: 'puTtc' },
-    { header: 'Montant HT', dataKey: 'totalHt' },
+    { header: 'Mt HT', dataKey: 'totalHt' },
   ];
 
   const rows = (invoice.items || []).map((item) => ({
@@ -443,27 +453,24 @@ export const generateInvoicePdf = (invoice) => {
     totalHt: money(item.totalHt),
   }));
 
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 20;
+  const availW = pageW - 2 * margin;
+
   doc.autoTable({
     columns,
     body: rows,
     startY: y + 4,
-    theme: 'grid',
-    headStyles: { fillColor: ACCENT, textColor: '#ffffff', fontStyle: 'bold', fontSize: 8 },
-    bodyStyles: { fontSize: 8, textColor: INK },
-    alternateRowStyles: { fillColor: ACCENT_SOFT },
-    margin: { left: 20, right: 20 },
-    tableLineColor: RULE,
-    tableLineWidth: 0.3,
-    styles: { cellPadding: 3 },
+    ...autoTableStyles,
     columnStyles: {
-      code: { cellWidth: 40 },
-      designation: { cellWidth: 'auto' },
-      qty: { cellWidth: 30, halign: 'right' },
-      unit: { cellWidth: 25, halign: 'center' },
-      puHt: { cellWidth: 45, halign: 'right' },
-      tva: { cellWidth: 30, halign: 'right' },
-      puTtc: { cellWidth: 45, halign: 'right' },
-      totalHt: { cellWidth: 50, halign: 'right' },
+      code: { cellWidth: 30 },
+      designation: { cellWidth: availW - 295 },
+      qty: { cellWidth: 28, halign: 'right' },
+      unit: { cellWidth: 22, halign: 'center' },
+      puHt: { cellWidth: 42, halign: 'right' },
+      tva: { cellWidth: 26, halign: 'right' },
+      puTtc: { cellWidth: 42, halign: 'right' },
+      totalHt: { cellWidth: 45, halign: 'right' },
     },
   });
 
@@ -483,21 +490,26 @@ export const generateInvoicePdf = (invoice) => {
     ['NET À PAYER', `${money(invoice.netToPay)} TND`],
   ], y);
 
+  const pageH = doc.internal.pageSize.getHeight();
+  const footerStart = pageH - 75;
+
+  if (y > footerStart) doc.addPage();
+
   doc.setTextColor(INK);
   doc.setFont('helvetica', 'italic');
-  doc.setFontSize(9);
-  doc.text(`Arrêtée la présente facture à la somme de : ${amountInFrench(invoice.netToPay)}.`, 20, y + 4);
+  doc.setFontSize(8);
+  doc.text(`Arrêtée la présente facture à la somme de : ${amountInFrench(invoice.netToPay)}.`, margin, y + 4);
 
   if (invoice.notes) {
     doc.setTextColor(MUTED);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(`Notes : ${invoice.notes}`, 20, y + 14);
+    doc.setFontSize(7);
+    doc.text(`Notes : ${invoice.notes}`, margin, y + 14);
   }
   if (invoice.mfNumber) {
     doc.setTextColor(MUTED);
-    doc.setFontSize(8);
-    doc.text(`MF client : ${invoice.mfNumber}`, 20, y + 22);
+    doc.setFontSize(7);
+    doc.text(`MF client : ${invoice.mfNumber}`, margin, y + 22);
   }
 
   drawFooter(doc);

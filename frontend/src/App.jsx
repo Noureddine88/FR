@@ -1059,22 +1059,35 @@ function Quotations() {
       notes: quotation.notes || '',
     });
     setCustomerSearch(quotation.customer ? `${String(quotation.customer.customerCode).padStart(4, '0')} - ${quotation.customer.fullName}` : (quotation.customerName || ''));
-    const mapped = (quotation.items || []).map((item, i) => ({
-      _key: i,
-      rollId: item.rollId || '',
-      articleCode: item.articleCode || '',
-      articleLabel: '',
-      designation: item.designation || '',
-      quantity: String(item.quantity || ''),
-      unit: item.unit || 'm',
-      unitPriceHt: String(item.unitPriceHt || ''),
-      remiseRate: item.remiseRate ?? 0,
-      tvaRate: item.tvaRate ?? 19,
-      selectedDesignId: '',
-      selectedColorId: '',
-    }));
+    const mapped = (quotation.items || []).map((item, i) => {
+      const roll = item.roll;
+      const color = roll?.color;
+      const design = color?.design;
+      return {
+        _key: i,
+        rollId: item.rollId || '',
+        articleCode: item.articleCode || '',
+        articleLabel: '',
+        designation: item.designation || '',
+        quantity: String(item.quantity || ''),
+        unit: item.unit || 'm',
+        unitPriceHt: String(item.unitPriceHt || ''),
+        remiseRate: item.remiseRate ?? 0,
+        tvaRate: item.tvaRate ?? 19,
+        selectedDesignId: design?.id || '',
+        selectedColorId: color?.id || '',
+      };
+    });
     setItems(mapped);
-    setDesignSearches(mapped.map(() => ''));
+    setDesignSearches((quotation.items || []).map((item) => {
+      const roll = item.roll;
+      const color = roll?.color;
+      const design = color?.design;
+      if (design) {
+        return `${formatArticleCode(design.designCode)} - ${design.reference?.name || ''} / ${design.name}`;
+      }
+      return item.designation || '';
+    }));
     setDesignDropdowns(mapped.map(() => false));
     setDesignSuggestions(mapped.map(() => []));
     window.scrollTo({ top: 0, behavior: 'smooth' });
