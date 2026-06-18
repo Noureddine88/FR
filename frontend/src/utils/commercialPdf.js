@@ -227,6 +227,11 @@ const drawFooter = (doc, { signatures = ['Signature client', 'Signature & cachet
   );
 };
 
+const flexWidths = (avail, flexFactors) => {
+  const totalFlex = flexFactors.reduce((s, v) => s + v, 0);
+  return flexFactors.map((f) => Math.round((f / totalFlex) * avail));
+};
+
 const autoTableStyles = {
   theme: 'grid',
   headStyles: { fillColor: ACCENT, textColor: '#ffffff', fontStyle: 'bold', fontSize: 7 },
@@ -236,7 +241,6 @@ const autoTableStyles = {
   tableLineColor: RULE,
   tableLineWidth: 0.3,
   styles: { cellPadding: 2, overflow: 'linebreak', fontSize: 7 },
-  tableWidth: 'auto',
 };
 
 export const generateQuotationPdf = (quotation) => {
@@ -273,21 +277,23 @@ export const generateQuotationPdf = (quotation) => {
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 20;
   const availW = pageW - 2 * margin;
+  const qColW = flexWidths(availW, [0.9, 3.4, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2]);
 
   doc.autoTable({
     columns,
     body: rows,
     startY: y + 4,
     ...autoTableStyles,
+    tableWidth: availW,
     columnStyles: {
-      code: { cellWidth: 30 },
-      designation: { cellWidth: availW - 295 },
-      qty: { cellWidth: 28, halign: 'right' },
-      unit: { cellWidth: 22, halign: 'center' },
-      puHt: { cellWidth: 42, halign: 'right' },
-      tva: { cellWidth: 26, halign: 'right' },
-      puTtc: { cellWidth: 42, halign: 'right' },
-      totalHt: { cellWidth: 45, halign: 'right' },
+      code: { cellWidth: qColW[0] },
+      designation: { cellWidth: qColW[1] },
+      qty: { cellWidth: qColW[2], halign: 'right' },
+      unit: { cellWidth: qColW[3], halign: 'center' },
+      puHt: { cellWidth: qColW[4], halign: 'right' },
+      tva: { cellWidth: qColW[5], halign: 'right' },
+      puTtc: { cellWidth: qColW[6], halign: 'right' },
+      totalHt: { cellWidth: qColW[7], halign: 'right' },
     },
   });
 
@@ -360,17 +366,19 @@ export const generateDeliveryPdf = (delivery) => {
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 20;
   const availW = pageW - 2 * margin;
+  const dColW = flexWidths(availW, [1.0, 4.5, 0.8, 0.7]);
 
   doc.autoTable({
     columns,
     body: rows,
     startY: y + 4,
     ...autoTableStyles,
+    tableWidth: availW,
     columnStyles: {
-      code: { cellWidth: 45 },
-      designation: { cellWidth: availW - 120 },
-      qty: { cellWidth: 38, halign: 'right' },
-      unit: { cellWidth: 30, halign: 'center' },
+      code: { cellWidth: dColW[0] },
+      designation: { cellWidth: dColW[1] },
+      qty: { cellWidth: dColW[2], halign: 'right' },
+      unit: { cellWidth: dColW[3], halign: 'center' },
     },
   });
 
@@ -456,21 +464,23 @@ export const generateInvoicePdf = (invoice) => {
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 20;
   const availW = pageW - 2 * margin;
+  const iColW = flexWidths(availW, [0.9, 3.4, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2]);
 
   doc.autoTable({
     columns,
     body: rows,
     startY: y + 4,
     ...autoTableStyles,
+    tableWidth: availW,
     columnStyles: {
-      code: { cellWidth: 30 },
-      designation: { cellWidth: availW - 295 },
-      qty: { cellWidth: 28, halign: 'right' },
-      unit: { cellWidth: 22, halign: 'center' },
-      puHt: { cellWidth: 42, halign: 'right' },
-      tva: { cellWidth: 26, halign: 'right' },
-      puTtc: { cellWidth: 42, halign: 'right' },
-      totalHt: { cellWidth: 45, halign: 'right' },
+      code: { cellWidth: iColW[0] },
+      designation: { cellWidth: iColW[1] },
+      qty: { cellWidth: iColW[2], halign: 'right' },
+      unit: { cellWidth: iColW[3], halign: 'center' },
+      puHt: { cellWidth: iColW[4], halign: 'right' },
+      tva: { cellWidth: iColW[5], halign: 'right' },
+      puTtc: { cellWidth: iColW[6], halign: 'right' },
+      totalHt: { cellWidth: iColW[7], halign: 'right' },
     },
   });
 

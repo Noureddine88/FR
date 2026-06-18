@@ -261,30 +261,39 @@ export const exportPdf = asyncHandler(async (req, res) => {
   const columns = report.columns.slice(0, 8);
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const colWidth = pageWidth / Math.max(columns.length, 1);
-  const rowHeight = 24;
+  const padX = 4;
+  const padY = 3;
+  const minRowH = 18;
+
   const drawRow = (row, y, isHeader = false) => {
+    const rowH = isHeader ? minRowH : Math.max(minRowH, ...columns.map((column, index) => {
+      const text = isHeader ? column : String(row[column] ?? '');
+      return doc.heightOfString(text, { width: colWidth - padX * 2 }) + padY * 2;
+    }));
     columns.forEach((column, index) => {
       const x = doc.page.margins.left + index * colWidth;
       doc
         .font(isHeader ? 'Helvetica-Bold' : 'Helvetica')
         .fontSize(isHeader ? 7 : 6.5)
         .fillColor(isHeader ? '#172026' : '#263238')
-        .text(isHeader ? column : String(row[column] ?? ''), x, y, { width: colWidth - 5, height: rowHeight - 4 });
+        .text(isHeader ? column : String(row[column] ?? ''), x + padX, y + padY, { width: colWidth - padX * 2, align: typeof report.rows[0]?.[column] === 'number' ? 'right' : 'left' });
     });
+    return rowH;
   };
 
   let y = doc.y;
-  drawRow(Object.fromEntries(columns.map((column) => [column, column])), y, true);
-  y += rowHeight;
+  y += drawRow(Object.fromEntries(columns.map((column) => [column, column])), y, true);
   report.rows.slice(0, 120).forEach((row) => {
-    if (y > doc.page.height - doc.page.margins.bottom - rowHeight) {
+    const rowH = drawRow(row, y);
+    if (y + rowH > doc.page.height - doc.page.margins.bottom - minRowH) {
       doc.addPage();
       y = doc.page.margins.top;
-      drawRow(Object.fromEntries(columns.map((column) => [column, column])), y, true);
-      y += rowHeight;
+      y += drawRow(Object.fromEntries(columns.map((column) => [column, column])), y, true);
+      const rowH2 = drawRow(row, y);
+      y += rowH2;
+    } else {
+      y += rowH;
     }
-    drawRow(row, y);
-    y += rowHeight;
   });
   if (report.rows.length > 120) {
     doc.moveDown().fontSize(8).text(`Rapport limité aux 120 premières lignes sur ${report.rows.length}.`);
