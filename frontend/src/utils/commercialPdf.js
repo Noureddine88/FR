@@ -84,17 +84,17 @@ const drawHeader = (doc, { title, number, dateStr }) => {
   doc.text(`Tél : ${COMPANY.phone}   |   Email : ${COMPANY.email}`, m, 38);
   doc.text(`MF : ${COMPANY.mf}   |   BANK : ${COMPANY.bank}`, m, 43);
 
-  const boxW = 90;
+  const boxW = 150;
   const boxX = pageW - m - boxW;
   doc.setFillColor(ACCENT);
   doc.roundedRect(boxX, 12, boxW, 36, 2, 2, 'F');
   doc.setTextColor('#ffffff');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(title, boxX + boxW / 2, 22, { align: 'center' });
+  doc.setFontSize(14);
+  doc.text(title, boxX + boxW / 2, 22, { align: 'center', maxWidth: boxW - 10 });
   doc.setFontSize(9);
-  doc.text(`N° ${number}`, boxX + boxW / 2, 32, { align: 'center' });
-  doc.text(`Date : ${dateStr}`, boxX + boxW / 2, 40, { align: 'center' });
+  doc.text(`N° ${number}`, boxX + boxW / 2, 32, { align: 'center', maxWidth: boxW - 10 });
+  doc.text(`Date : ${dateStr}`, boxX + boxW / 2, 40, { align: 'center', maxWidth: boxW - 10 });
 
   doc.setDrawColor(RULE);
   doc.setLineWidth(0.5);
@@ -106,8 +106,10 @@ const drawHeader = (doc, { title, number, dateStr }) => {
 const drawCustomerBlock = (doc, document, yStart) => {
   const pageW = doc.internal.pageSize.getWidth();
   const m = 20;
-  const colW = (pageW - 2 * m - 8) / 2;
+  const gap = 8;
+  const colW = (pageW - 2 * m - gap) / 2;
   const innerX = m + 5;
+  const textW = colW - 10;
 
   const fullName = document.customer?.fullName || document.customerName || 'Client de passage';
   const customerCode = document.customer?.customerCode ?? document.customerCode;
@@ -121,8 +123,11 @@ const drawCustomerBlock = (doc, document, yStart) => {
   if (phone) lines.push(`Tél : ${phone}`);
   if (addr) lines.push(String(addr));
 
-  const lineH = 5;
-  const cardH = Math.max(40, 16 + lines.length * lineH + 6);
+  const nameLines = doc.splitTextToSize(fullName, textW);
+  const nameH = nameLines.length * 12;
+  const lineHs = lines.map((t) => doc.splitTextToSize(t, textW).length * 9.6 + 1);
+  const linesTotalH = lineHs.reduce((s, h) => s + h, 0);
+  const cardH = Math.max(60, 16 + nameH + 8 + linesTotalH + 6);
 
   doc.setFillColor(ACCENT_SOFT);
   doc.setDrawColor(RULE);
@@ -134,13 +139,18 @@ const drawCustomerBlock = (doc, document, yStart) => {
   doc.setTextColor(INK);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text(fullName, innerX, yStart + 14);
+  doc.text(nameLines, innerX, yStart + 16);
   doc.setTextColor(MUTED);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  lines.forEach((t, i) => doc.text(t, innerX, yStart + 22 + i * lineH));
+  let cy = yStart + 16 + nameH + 4;
+  lines.forEach((t) => {
+    const wrapped = doc.splitTextToSize(t, textW);
+    doc.text(wrapped, innerX, cy);
+    cy += wrapped.length * 9.6 + 1;
+  });
 
-  const x2 = m + colW + 8;
+  const x2 = m + colW + gap;
   doc.setFillColor('#ffffff');
   doc.setDrawColor(RULE);
   doc.roundedRect(x2, yStart, colW, cardH, 2, 2, 'FD');
@@ -155,12 +165,13 @@ const drawCustomerBlock = (doc, document, yStart) => {
     ['Conditions', '30 jours'],
     ['Devise', 'Dinar Tunisien (TND)'],
   ];
+  const infoTextW = colW - 70;
   info.forEach(([k, v], i) => {
-    const iy = yStart + 16 + i * 10;
+    const iy = yStart + 16 + i * 12;
     doc.setTextColor(MUTED);
-    doc.text(k, x2 + 5, iy);
+    doc.text(k, x2 + 5, iy, { maxWidth: 60 });
     doc.setTextColor(INK);
-    doc.text(v, x2 + 65, iy);
+    doc.text(v, x2 + 70, iy, { maxWidth: infoTextW });
   });
 
   return yStart + cardH + 8;
@@ -169,10 +180,12 @@ const drawCustomerBlock = (doc, document, yStart) => {
 const drawTotalsBox = (doc, lines, y) => {
   const pageW = doc.internal.pageSize.getWidth();
   const m = 20;
-  const boxW = 110;
+  const boxW = 140;
   const boxX = pageW - m - boxW;
-  const rowH = 8;
+  const rowH = 10;
   const h = lines.length * rowH + 4;
+  const labelW = Math.round(boxW * 0.48);
+  const valueW = boxW - 10 - labelW;
 
   doc.setDrawColor(RULE);
   doc.setFillColor('#ffffff');
@@ -192,8 +205,8 @@ const drawTotalsBox = (doc, lines, y) => {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
     }
-    doc.text(line[0], boxX + 5, ly + 3);
-    doc.text(line[1], boxX + boxW - 5, ly + 3, { align: 'right' });
+    doc.text(line[0], boxX + 5, ly + 3, { maxWidth: labelW });
+    doc.text(line[1], boxX + boxW - 5, ly + 3, { maxWidth: valueW, align: 'right' });
   });
 
   return y + h + 6;
