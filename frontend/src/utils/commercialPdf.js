@@ -1,299 +1,303 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
+// ─── COMPANY CONFIG ───────────────────────────────────────────────────────────
 const COMPANY = {
-  name: 'Kenza Pro',
+  name:    'Kenza Pro',
   tagline: 'Commerce produits textils',
   address: '0.42.Av Farhat Hached Sfax',
-  phone: '+216 71 000 000',
-  email: 'contact@curtain-erp.tn',
-  rib: '47/002/0000000036342/94',
-  mf: '1446836 W/B/M/000',
-  bank: 'Wifak bank sfax majida boulila',
+  phone:   '+216 71 000 000',
+  email:   'contact@curtain-erp.tn',
+  rib:     '47/002/0000000036342/94',
+  mf:      '1446836 W/B/M/000',
+  bank:    'Wifak bank sfax majida boulila',
 };
 
-const ACCENT      = '#0f3460';
-const ACCENT_SOFT = '#eef2f8';
-const RULE        = '#cdd5df';
-const INK         = '#1a2230';
-const MUTED       = '#6b7785';
+// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+const COLOR = {
+  accent:      '#0f3460',
+  accentSoft:  '#eef2f8',
+  accentLight: '#dce6f5',
+  rule:        '#cdd5df',
+  ink:         '#1a2230',
+  muted:       '#6b7785',
+  white:       '#ffffff',
+};
 
+// ─── LAYOUT CONSTANTS ─────────────────────────────────────────────────────────
+const PAGE_W      = 595.28;
+const PAGE_H      = 841.89;
 const MARGIN      = 20;
-const FOOTER_AREA = 70;
+const CONTENT_W   = PAGE_W - 2 * MARGIN;
+const FOOTER_H    = 58;   // reserved at bottom of every page
+const HEADER_H    = 57;   // header block height on page 1
+const CONT_HEAD_H = 28;   // slim continuation banner on page 2+
+const MIN_ROW_H   = 14;   // minimum space to keep together
 
-const money = (value) =>
-  Number(value || 0)
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const money = (v) =>
+  Number(v || 0)
     .toFixed(3)
     .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
-const date = (value) => new Date(value || Date.now()).toLocaleDateString('fr-FR');
-
-const formatArticleCode = (code) => {
-  const digits = String(code ?? '').replace(/\D/g, '');
-  if (!digits) return String(code ?? '');
-  return String(Number(digits)).padStart(4, '0');
+const fmt = {
+  date: (v) => new Date(v || Date.now()).toLocaleDateString('fr-FR'),
+  code: (c) => {
+    const d = String(c ?? '').replace(/\D/g, '');
+    return d ? String(Number(d)).padStart(4, '0') : String(c ?? '');
+  },
+  pct:  (r) => `${Number(r ?? 0).toFixed(0)}%`,
+  qty:  (q) => Number(q).toLocaleString('fr-FR'),
 };
 
-const unitPriceTtc = (unitPriceHt, tvaRate) =>
-  Number(unitPriceHt || 0) * (1 + Number(tvaRate || 0) / 100);
+const unitPriceTtc = (ht, tva) => Number(ht || 0) * (1 + Number(tva || 0) / 100);
 
-const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix',
-  'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize'];
-const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante'];
+// ─── AMOUNT IN FRENCH WORDS ───────────────────────────────────────────────────
+const UNITS = ['','un','deux','trois','quatre','cinq','six','sept','huit','neuf',
+               'dix','onze','douze','treize','quatorze','quinze','seize'];
+const TENS  = ['','','vingt','trente','quarante','cinquante','soixante'];
 
-const underHundred = (n) => {
-  if (n < 17) return units[n];
-  if (n < 20) return `dix-${units[n - 10]}`;
-  if (n < 70) return `${tens[Math.floor(n / 10)]}${n % 10 ? `-${units[n % 10]}` : ''}`;
-  if (n < 80) return `soixante-${underHundred(n - 60)}`;
-  return `quatre-vingt${n === 80 ? 's' : `-${underHundred(n - 80)}`}`;
+const sub100 = (n) => {
+  if (n < 17) return UNITS[n];
+  if (n < 20) return `dix-${UNITS[n - 10]}`;
+  if (n < 70) return `${TENS[Math.floor(n / 10)]}${n % 10 ? `-${UNITS[n % 10]}` : ''}`;
+  if (n < 80) return `soixante-${sub100(n - 60)}`;
+  return `quatre-vingt${n === 80 ? 's' : `-${sub100(n - 80)}`}`;
 };
 
-const numberToWords = (n) => {
+const toWords = (n) => {
   if (n === 0) return 'zéro';
-  if (n < 100) return underHundred(n);
-  if (n < 1000)
-    return `${n >= 200 ? `${units[Math.floor(n / 100)]} ` : ''}cent${n % 100 ? ` ${numberToWords(n % 100)}` : ''}`;
-  if (n < 1000000)
-    return `${Math.floor(n / 1000) === 1 ? 'mille' : `${numberToWords(Math.floor(n / 1000))} mille`}${
-      n % 1000 ? ` ${numberToWords(n % 1000)}` : ''
-    }`;
+  if (n < 100) return sub100(n);
+  if (n < 1000) return `${n >= 200 ? `${UNITS[Math.floor(n / 100)]} ` : ''}cent${n % 100 ? ` ${toWords(n % 100)}` : ''}`;
+  if (n < 1_000_000)
+    return `${Math.floor(n / 1000) === 1 ? 'mille' : `${toWords(Math.floor(n / 1000))} mille`}${n % 1000 ? ` ${toWords(n % 1000)}` : ''}`;
   return String(n);
 };
 
-const amountInFrench = (amount) => {
-  const dinars   = Math.floor(Number(amount || 0));
-  const millimes = Math.round((Number(amount || 0) - dinars) * 1000);
-  return `${numberToWords(dinars)} dinars${millimes ? ` et ${numberToWords(millimes)} millimes` : ''}`;
+const amountWords = (amount) => {
+  const d = Math.floor(Number(amount || 0));
+  const m = Math.round((Number(amount || 0) - d) * 1000);
+  return `${toWords(d)} dinars${m ? ` et ${toWords(m)} millimes` : ''}`;
 };
 
-const availableSpace = (doc, y) => {
-  const pageH = doc.internal.pageSize.getHeight();
-  return pageH - FOOTER_AREA - y;
+// ─── FLEX COLUMN WIDTHS ───────────────────────────────────────────────────────
+const flexWidths = (total, factors) => {
+  const sum = factors.reduce((a, b) => a + b, 0);
+  return factors.map((f) => Math.round((f / sum) * total));
 };
 
-const ensureSpace = (doc, y, needed) => {
-  if (availableSpace(doc, y) < needed) {
-    doc.addPage();
-    return MARGIN;
+// ─── FONT HELPERS ─────────────────────────────────────────────────────────────
+const setFont = (doc, size, style = 'normal', color = COLOR.ink) => {
+  doc.setFont('helvetica', style);
+  doc.setFontSize(size);
+  doc.setTextColor(color);
+};
+
+// ─── PAGE MANAGER ─────────────────────────────────────────────────────────────
+/**
+ * Tracks current Y position, handles multi-page documents.
+ * drawContinuationHeader is called at top of each new page.
+ */
+class PageManager {
+  constructor(doc, docTitle, docNumber) {
+    this.doc      = doc;
+    this.title    = docTitle;
+    this.number   = docNumber;
+    this.y        = HEADER_H;
+    this.pageNum  = 1;
   }
-  return y;
-};
 
+  /** Available vertical space on current page */
+  available() {
+    return PAGE_H - FOOTER_H - this.y;
+  }
+
+  /** Ensure `needed` pt of vertical space; adds page if not enough */
+  need(needed) {
+    if (this.available() >= needed) return;
+    this.addPage();
+  }
+
+  addPage() {
+    this.doc.addPage();
+    this.pageNum++;
+    this._drawContinuationBanner();
+    this.y = CONT_HEAD_H + 6;
+  }
+
+  _drawContinuationBanner() {
+    const doc = this.doc;
+    // Slim top bar
+    doc.setFillColor(COLOR.accent);
+    doc.rect(0, 0, PAGE_W, 3, 'F');
+    // Company name left
+    setFont(doc, 9, 'bold', COLOR.accent);
+    doc.text(COMPANY.name, MARGIN, 15);
+    // Doc badge right
+    const badge = `${this.title}  •  N° ${this.number}  •  suite`;
+    setFont(doc, 7.5, 'normal', COLOR.muted);
+    doc.text(badge, PAGE_W - MARGIN, 15, { align: 'right' });
+    // Rule
+    doc.setDrawColor(COLOR.rule);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, CONT_HEAD_H - 2, PAGE_W - MARGIN, CONT_HEAD_H - 2);
+  }
+}
+
+// ─── HEADER (page 1) ─────────────────────────────────────────────────────────
 const drawHeader = (doc, { title, number, dateStr }) => {
-  const pageW  = doc.internal.pageSize.getWidth();
-  const boxW   = 155;
-  const boxX   = pageW - MARGIN - boxW;
-  const compW  = boxX - MARGIN - 8;
+  const badgeW = 160;
+  const badgeX = PAGE_W - MARGIN - badgeW;
+  const infoW  = badgeX - MARGIN - 8;
 
-  doc.setFillColor(ACCENT);
-  doc.rect(0, 0, pageW, 4, 'F');
+  // Top accent bar
+  doc.setFillColor(COLOR.accent);
+  doc.rect(0, 0, PAGE_W, 4, 'F');
 
-  doc.setTextColor(ACCENT);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(COMPANY.name, MARGIN, 19, { maxWidth: compW });
+  // Company block
+  setFont(doc, 15, 'bold', COLOR.accent);
+  doc.text(COMPANY.name, MARGIN, 18, { maxWidth: infoW });
 
-  doc.setTextColor(MUTED);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.text(COMPANY.tagline,                                         MARGIN, 27,  { maxWidth: compW });
-  doc.text(COMPANY.address,                                         MARGIN, 32,  { maxWidth: compW });
-  doc.text(`Tél : ${COMPANY.phone}   |   Email : ${COMPANY.email}`, MARGIN, 37,  { maxWidth: compW });
-  doc.text(`MF : ${COMPANY.mf}   |   BANK : ${COMPANY.bank}`,       MARGIN, 42,  { maxWidth: compW });
-
-  doc.setFillColor(ACCENT);
-  doc.roundedRect(boxX, 10, boxW, 38, 2, 2, 'F');
-  doc.setTextColor('#ffffff');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text(title,             boxX + boxW / 2, 22, { align: 'center', maxWidth: boxW - 8 });
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`N° ${number}`,    boxX + boxW / 2, 32, { align: 'center', maxWidth: boxW - 8 });
-  doc.text(`Date : ${dateStr}`, boxX + boxW / 2, 40, { align: 'center', maxWidth: boxW - 8 });
-
-  doc.setDrawColor(RULE);
-  doc.setLineWidth(0.4);
-  doc.line(MARGIN, 51, pageW - MARGIN, 51);
-
-  return 57;
-};
-
-const drawCustomerBlock = (doc, document, yStart) => {
-  const pageW  = doc.internal.pageSize.getWidth();
-  const gap    = 8;
-  const colW   = (pageW - 2 * MARGIN - gap) / 2;
-  const innerX = MARGIN + 5;
-  const textW  = colW - 10;
-
-  const fullName     = document.customer?.fullName || document.customerName || 'Client de passage';
-  const customerCode = document.customer?.customerCode ?? document.customerCode;
-  const matricule    = document.customer?.matriculeFiscale ?? document.matriculeFiscale;
-  const phone        = document.customer?.phone || document.customerPhone;
-  const addr         = document.customer?.address || document.customerAddress || document.deliveryAddress;
-
-  const lines = [];
-  if (customerCode != null) lines.push(`Code Client : ${String(customerCode).padStart(4, '0')}`);
-  if (matricule)             lines.push(`Matricule Fiscale : ${matricule}`);
-  if (phone)                 lines.push(`Tél : ${phone}`);
-  if (addr)                  lines.push(String(addr));
-
-  doc.setFontSize(10);
-  const nameLines = doc.splitTextToSize(fullName, textW);
-  const nameH     = nameLines.length * 12;
-
-  doc.setFontSize(8);
-  const lineHs     = lines.map((t) => doc.splitTextToSize(t, textW).length * 9.6 + 1);
-  const linesTotalH = lineHs.reduce((s, h) => s + h, 0);
-  const cardH       = Math.max(60, 16 + nameH + 8 + linesTotalH + 6);
-
-  yStart = ensureSpace(doc, yStart, cardH);
-  const actualY = yStart;
-
-  doc.setFillColor(ACCENT_SOFT);
-  doc.setDrawColor(RULE);
-  doc.roundedRect(MARGIN, actualY, colW, cardH, 2, 2, 'FD');
-
-  doc.setTextColor(ACCENT);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('CLIENT', innerX, actualY + 6);
-
-  doc.setTextColor(INK);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text(nameLines, innerX, actualY + 16);
-
-  doc.setTextColor(MUTED);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  let cy = actualY + 16 + nameH + 4;
-  lines.forEach((t) => {
-    const wrapped = doc.splitTextToSize(t, textW);
-    doc.text(wrapped, innerX, cy);
-    cy += wrapped.length * 9.6 + 1;
+  setFont(doc, 7.5, 'normal', COLOR.muted);
+  const companyLines = [
+    COMPANY.tagline,
+    COMPANY.address,
+    `Tél : ${COMPANY.phone}   |   Email : ${COMPANY.email}`,
+    `MF : ${COMPANY.mf}`,
+    `BANK : ${COMPANY.bank}`,
+  ];
+  let cy = 26;
+  companyLines.forEach((line) => {
+    const wrapped = doc.splitTextToSize(line, infoW);
+    doc.text(wrapped, MARGIN, cy, { maxWidth: infoW });
+    cy += wrapped.length * 8.5;
   });
 
-  const x2        = MARGIN + colW + gap;
-  const cardInner = colW - 10;
-  const labelColW = 62;
-  const valueColW = cardInner - labelColW - 4;
+  // Document badge
+  doc.setFillColor(COLOR.accent);
+  doc.roundedRect(badgeX, 8, badgeW, 40, 2, 2, 'F');
 
-  doc.setFillColor('#ffffff');
-  doc.setDrawColor(RULE);
-  doc.roundedRect(x2, actualY, colW, cardH, 2, 2, 'FD');
+  setFont(doc, 14, 'bold', COLOR.white);
+  doc.text(title, badgeX + badgeW / 2, 21, { align: 'center', maxWidth: badgeW - 8 });
 
-  doc.setTextColor(ACCENT);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('INFORMATIONS', x2 + 5, actualY + 6);
+  setFont(doc, 8, 'normal', COLOR.white);
+  doc.text(`N° ${number}`,      badgeX + badgeW / 2, 31, { align: 'center', maxWidth: badgeW - 8 });
+  doc.text(`Date : ${dateStr}`, badgeX + badgeW / 2, 40, { align: 'center', maxWidth: badgeW - 8 });
 
-  const info = [
+  // Divider
+  doc.setDrawColor(COLOR.rule);
+  doc.setLineWidth(0.4);
+  doc.line(MARGIN, 52, PAGE_W - MARGIN, 52);
+};
+
+// ─── CUSTOMER BLOCK ───────────────────────────────────────────────────────────
+/**
+ * Fully dynamic height: wraps long addresses, handles missing fields gracefully.
+ * Returns new Y after the block.
+ */
+const drawCustomerBlock = (pm, document) => {
+  const doc    = pm.doc;
+  const gap    = 8;
+  const colW   = (CONTENT_W - gap) / 2;
+  const inner  = colW - 10;
+  const x1     = MARGIN;
+  const x2     = MARGIN + colW + gap;
+
+  // Collect customer data
+  const fullName = document.customer?.fullName || document.customerName || 'Client de passage';
+  const custCode = document.customer?.customerCode ?? document.customerCode;
+  const mf       = document.customer?.matriculeFiscale ?? document.matriculeFiscale;
+  const phone    = document.customer?.phone || document.customerPhone;
+  const addr     = document.customer?.address || document.customerAddress || document.deliveryAddress;
+
+  const detailLines = [
+    custCode != null ? `Code Client : ${String(custCode).padStart(4, '0')}` : null,
+    mf       ? `Matricule Fiscale : ${mf}` : null,
+    phone    ? `Tél : ${phone}` : null,
+    addr     ? String(addr) : null,
+  ].filter(Boolean);
+
+  // Measure heights
+  setFont(doc, 10, 'bold');
+  const nameWrapped = doc.splitTextToSize(fullName, inner);
+  const nameH       = nameWrapped.length * 13;
+
+  setFont(doc, 8, 'normal');
+  const LINE_GAP = 10;
+  const detailH  = detailLines.reduce((sum, line) => {
+    return sum + doc.splitTextToSize(line, inner).length * LINE_GAP + 1;
+  }, 0);
+
+  const cardH = Math.max(52, 20 + nameH + 6 + detailH + 8);
+
+  // Info panel rows
+  const infoRows = [
     ['Mode de règlement', document.paymentMethod || 'Espèces / Virement'],
     ['Conditions',        document.paymentTerms  || '30 jours'],
     ['Devise',            'Dinar Tunisien (TND)'],
   ];
+  if (document.mfNumber)   infoRows.push(['MF Client', document.mfNumber]);
+  if (document.reference)  infoRows.push(['Référence', document.reference]);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  info.forEach(([k, v], i) => {
-    const iy = actualY + 16 + i * 12;
-    doc.setTextColor(MUTED);
-    doc.text(k, x2 + 5,              iy, { maxWidth: labelColW });
-    doc.setTextColor(INK);
-    doc.text(v, x2 + 5 + labelColW + 4, iy, { maxWidth: valueColW });
-  });
+  const infoRowH = 12;
+  const infoCardH = Math.max(cardH, 20 + infoRows.length * infoRowH + 8);
+  const finalCardH = Math.max(cardH, infoCardH);
 
-  return actualY + cardH + 8;
-};
+  pm.need(finalCardH + 12);
+  const y = pm.y;
 
-const drawTotalsBox = (doc, lines, y) => {
-  const pageW  = doc.internal.pageSize.getWidth();
-  const boxW   = 170;
-  const boxX   = pageW - MARGIN - boxW;
-  const rowH   = 10;
-  const h      = lines.length * rowH + 4;
-  const labelW = 95;
-  const valueW = boxW - labelW - 10;
-
-  y = ensureSpace(doc, y, h + 10);
-
-  doc.setDrawColor(RULE);
-  doc.setFillColor('#ffffff');
-  doc.roundedRect(boxX, y, boxW, h, 2, 2, 'FD');
-
-  lines.forEach((line, idx) => {
-    const ly     = y + 3 + idx * rowH;
-    const isLast = idx === lines.length - 1;
-
-    if (isLast) {
-      doc.setFillColor(ACCENT);
-      doc.rect(boxX, ly - 1, boxW, rowH, 'F');
-      doc.setTextColor('#ffffff');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9.5);
-    } else {
-      doc.setTextColor(INK);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-    }
-
-    doc.text(line[0], boxX + 5, ly + 6, { maxWidth: labelW });
-    doc.text(line[1], boxX + boxW - 5, ly + 6, { align: 'right', maxWidth: valueW });
-  });
-
-  return y + h + 6;
-};
-
-const drawFooter = (doc, { signatures = ['Signature client', 'Signature & cachet société'] } = {}) => {
-  const pageH = doc.internal.pageSize.getHeight();
-  const pageW = doc.internal.pageSize.getWidth();
-  const fy    = pageH - 55;
-  const segW  = (pageW - 2 * MARGIN) / signatures.length;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  signatures.forEach((label, i) => {
-    doc.setTextColor(MUTED);
-    doc.text(label, MARGIN + i * segW + segW / 2, fy, { align: 'center' });
-    doc.setDrawColor(RULE);
-    doc.setLineWidth(0.4);
-    doc.line(MARGIN + i * segW + 10, fy + 22, MARGIN + i * segW + segW - 10, fy + 22);
-  });
-
-  doc.setDrawColor(RULE);
+  // ── Left card (client) ──
+  doc.setFillColor(COLOR.accentSoft);
+  doc.setDrawColor(COLOR.rule);
   doc.setLineWidth(0.3);
-  doc.line(MARGIN, pageH - 16, pageW - MARGIN, pageH - 16);
-  doc.setTextColor(MUTED);
-  doc.setFontSize(7);
-  doc.text(
-    `${COMPANY.name}  •  ${COMPANY.address}  •  MF : ${COMPANY.mf}  •  RIB : ${COMPANY.rib}`,
-    pageW / 2, pageH - 12, { align: 'center' },
-  );
+  doc.roundedRect(x1, y, colW, finalCardH, 2, 2, 'FD');
+
+  setFont(doc, 7.5, 'bold', COLOR.accent);
+  doc.text('CLIENT', x1 + 5, y + 8);
+
+  setFont(doc, 10, 'bold', COLOR.ink);
+  doc.text(nameWrapped, x1 + 5, y + 18, { maxWidth: inner });
+
+  setFont(doc, 7.5, 'normal', COLOR.muted);
+  let ky = y + 18 + nameH + 4;
+  detailLines.forEach((line) => {
+    const wrapped = doc.splitTextToSize(line, inner);
+    doc.text(wrapped, x1 + 5, ky, { maxWidth: inner });
+    ky += wrapped.length * LINE_GAP + 1;
+  });
+
+  // ── Right card (info) ──
+  const labelW = 70;
+  const valueW = inner - labelW - 4;
+
+  doc.setFillColor(COLOR.white);
+  doc.setDrawColor(COLOR.rule);
+  doc.roundedRect(x2, y, colW, finalCardH, 2, 2, 'FD');
+
+  setFont(doc, 7.5, 'bold', COLOR.accent);
+  doc.text('INFORMATIONS', x2 + 5, y + 8);
+
+  infoRows.forEach(([label, value], i) => {
+    const iy = y + 18 + i * infoRowH;
+    // Alternating subtle stripe
+    if (i % 2 === 1) {
+      doc.setFillColor(COLOR.accentSoft);
+      doc.rect(x2 + 1, iy - 3, colW - 2, infoRowH, 'F');
+    }
+    setFont(doc, 7.5, 'normal', COLOR.muted);
+    doc.text(label, x2 + 5, iy + 5, { maxWidth: labelW });
+    setFont(doc, 7.5, 'normal', COLOR.ink);
+    const valWrapped = doc.splitTextToSize(value, valueW);
+    doc.text(valWrapped, x2 + 5 + labelW + 4, iy + 5, { maxWidth: valueW });
+  });
+
+  pm.y = y + finalCardH + 10;
 };
 
-const flexWidths = (avail, flexFactors) => {
-  const totalFlex = flexFactors.reduce((s, v) => s + v, 0);
-  return flexFactors.map((f) => Math.round((f / totalFlex) * avail));
-};
-
-const autoTableStyles = {
-  theme: 'grid',
-  headStyles: { fillColor: ACCENT, textColor: '#ffffff', fontStyle: 'bold', fontSize: 7 },
-  bodyStyles: { fontSize: 7, textColor: INK },
-  alternateRowStyles: { fillColor: ACCENT_SOFT },
-  margin: { left: 20, right: 20 },
-  tableLineColor: RULE,
-  tableLineWidth: 0.3,
-  styles: { cellPadding: 2, overflow: 'linebreak', fontSize: 7 },
-};
-
-const PAGE_W = 595.28;
-
-const buildTable = (doc, columns, columnFlex, rows, startY) => {
-  const availW = PAGE_W - 2 * MARGIN;
-  const colW   = flexWidths(availW, columnFlex);
+// ─── ITEMS TABLE ──────────────────────────────────────────────────────────────
+const drawTable = (pm, columns, flexFactors, rows) => {
+  const doc   = pm.doc;
+  const colW  = flexWidths(CONTENT_W, flexFactors);
   const colStyles = {};
   columns.forEach((c, i) => {
     colStyles[c.dataKey] = { cellWidth: colW[i], ...(c.align ? { halign: c.align } : {}) };
@@ -302,79 +306,238 @@ const buildTable = (doc, columns, columnFlex, rows, startY) => {
   doc.autoTable({
     columns,
     body: rows,
-    startY,
-    ...autoTableStyles,
-    tableWidth: availW,
-    columnStyles: colStyles,
+    startY: pm.y,
+    theme: 'grid',
+    headStyles: {
+      fillColor:  COLOR.accent,
+      textColor:  COLOR.white,
+      fontStyle:  'bold',
+      fontSize:   7,
+      cellPadding: 3,
+    },
+    bodyStyles: {
+      fontSize:    7,
+      textColor:   COLOR.ink,
+      cellPadding: 2.5,
+      lineColor:   COLOR.rule,
+      lineWidth:   0.25,
+    },
+    alternateRowStyles: { fillColor: COLOR.accentSoft },
+    margin:           { left: MARGIN, right: MARGIN },
+    tableLineColor:   COLOR.rule,
+    tableLineWidth:   0.3,
+    tableWidth:       CONTENT_W,
+    columnStyles:     colStyles,
+    styles:           { overflow: 'linebreak', fontSize: 7 },
+    // Keep heading on each page
+    showHead: 'everyPage',
+    // autoTable handles its own page breaks — sync pm.y after
+    didAddPage: () => {
+      pm.pageNum++;
+      pm._drawContinuationBanner?.();
+    },
   });
+
+  pm.y = doc.lastAutoTable.finalY + 8;
+};
+
+// ─── TOTALS BOX ───────────────────────────────────────────────────────────────
+const drawTotalsBox = (pm, rows) => {
+  const doc    = pm.doc;
+  const boxW   = 175;
+  const boxX   = PAGE_W - MARGIN - boxW;
+  const rowH   = 11;
+  const padTop = 4;
+  const h      = padTop + rows.length * rowH + 4;
+  const labelW = 95;
+  const valueW = boxW - labelW - 10;
+
+  pm.need(h + 8);
+  const y = pm.y;
+
+  doc.setFillColor(COLOR.white);
+  doc.setDrawColor(COLOR.rule);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(boxX, y, boxW, h, 2, 2, 'FD');
+
+  rows.forEach((row, idx) => {
+    const ly     = y + padTop + idx * rowH;
+    const isLast = idx === rows.length - 1;
+
+    if (isLast) {
+      doc.setFillColor(COLOR.accent);
+      doc.rect(boxX, ly, boxW, rowH + 2, 'F');
+      setFont(doc, 9, 'bold', COLOR.white);
+    } else {
+      // Alternating tint on non-last rows
+      if (idx % 2 === 0) {
+        doc.setFillColor(COLOR.accentSoft);
+        doc.rect(boxX + 0.5, ly, boxW - 1, rowH, 'F');
+      }
+      setFont(doc, 7.5, 'normal', COLOR.ink);
+    }
+
+    doc.text(row[0], boxX + 5,      ly + 7.5, { maxWidth: labelW });
+    doc.text(row[1], boxX + boxW - 5, ly + 7.5, { align: 'right', maxWidth: valueW });
+  });
+
+  pm.y = y + h + 8;
+};
+
+// ─── AMOUNT IN WORDS ─────────────────────────────────────────────────────────
+const drawAmountWords = (pm, amount, prefix) => {
+  const doc  = pm.doc;
+  const text = `${prefix} ${amountWords(amount)}.`;
+  setFont(doc, 8, 'italic', COLOR.ink);
+  const lines = doc.splitTextToSize(text, CONTENT_W);
+  pm.need(lines.length * 10 + 6);
+  doc.text(lines, MARGIN, pm.y + 4, { maxWidth: CONTENT_W });
+  pm.y += lines.length * 10 + 6;
+};
+
+// ─── NOTES ───────────────────────────────────────────────────────────────────
+const drawNotes = (pm, notes) => {
+  if (!notes) return;
+  const doc   = pm.doc;
+  const label = 'Notes :';
+  setFont(doc, 7.5, 'bold', COLOR.muted);
+  const body    = doc.splitTextToSize(notes, CONTENT_W - 30);
+  const blockH  = body.length * 9.5 + 16;
+  pm.need(blockH + 4);
+
+  doc.setFillColor(COLOR.accentSoft);
+  doc.setDrawColor(COLOR.rule);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(MARGIN, pm.y, CONTENT_W, blockH - 4, 2, 2, 'FD');
+
+  doc.text(label, MARGIN + 5, pm.y + 9);
+  setFont(doc, 7.5, 'normal', COLOR.ink);
+  doc.text(body, MARGIN + 5, pm.y + 18, { maxWidth: CONTENT_W - 10 });
+
+  pm.y += blockH + 4;
+};
+
+// ─── VALIDITY LINE ────────────────────────────────────────────────────────────
+const drawValidity = (pm, text) => {
+  const doc  = pm.doc;
+  setFont(doc, 6.5, 'italic', COLOR.muted);
+  pm.need(12);
+  doc.text(text, MARGIN, pm.y + 4, { maxWidth: CONTENT_W });
+  pm.y += 12;
+};
+
+// ─── FOOTER (all pages) ───────────────────────────────────────────────────────
+const drawFooter = (doc, opts = {}) => {
+  const sigs = opts.signatures || ['Signature client', 'Signature & cachet société'];
+  const pageCount = doc.internal.getNumberOfPages();
+
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    const fy  = PAGE_H - 52;
+    const segW = CONTENT_W / sigs.length;
+
+    sigs.forEach((label, i) => {
+      setFont(doc, 7.5, 'normal', COLOR.muted);
+      const cx = MARGIN + i * segW + segW / 2;
+      doc.text(label, cx, fy, { align: 'center' });
+      doc.setDrawColor(COLOR.rule);
+      doc.setLineWidth(0.4);
+      doc.line(MARGIN + i * segW + 12, fy + 20, MARGIN + (i + 1) * segW - 12, fy + 20);
+    });
+
+    // Page numbers (only multi-page)
+    if (pageCount > 1) {
+      setFont(doc, 6.5, 'normal', COLOR.muted);
+      doc.text(`${p} / ${pageCount}`, PAGE_W - MARGIN, PAGE_H - 18, { align: 'right' });
+    }
+
+    // Bottom rule + footer text
+    doc.setDrawColor(COLOR.rule);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, PAGE_H - 14, PAGE_W - MARGIN, PAGE_H - 14);
+    setFont(doc, 6.5, 'normal', COLOR.muted);
+    doc.text(
+      `${COMPANY.name}  •  ${COMPANY.address}  •  MF : ${COMPANY.mf}  •  RIB : ${COMPANY.rib}`,
+      PAGE_W / 2, PAGE_H - 10, { align: 'center' },
+    );
+  }
+};
+
+// ─── AUTOTABLE PAGE SYNC HELPER ───────────────────────────────────────────────
+/**
+ * autoTable manages its own page breaks internally; after it runs we must
+ * make sure the PageManager's page count matches the PDF's real page count.
+ */
+const syncPages = (pm) => {
+  const realPages = pm.doc.internal.getNumberOfPages();
+  if (realPages > pm.pageNum) {
+    pm.pageNum = realPages;
+    pm.doc.setPage(pm.pageNum);
+  }
 };
 
 // ─── DEVIS ───────────────────────────────────────────────────────────────────
 export const generateQuotationPdf = (quotation) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  drawHeader(doc, {
+    title:   'DEVIS',
+    number:  quotation.quotationNumber,
+    dateStr: fmt.date(quotation.createdAt),
+  });
 
-  let y = drawHeader(doc, { title: 'DEVIS', number: quotation.quotationNumber, dateStr: date(quotation.createdAt) });
-  y = drawCustomerBlock(doc, quotation, y + 4);
+  const pm = new PageManager(doc, 'DEVIS', quotation.quotationNumber);
+  pm.y += 4;
+  drawCustomerBlock(pm, quotation);
 
   const columns = [
     { header: 'Code',        dataKey: 'code' },
     { header: 'Désignation', dataKey: 'designation' },
-    { header: 'Qté',         dataKey: 'qty',        align: 'right' },
-    { header: 'UN',          dataKey: 'unit',        align: 'center' },
-    { header: 'P.U HT',     dataKey: 'puHt',        align: 'right' },
-    { header: 'TVA',         dataKey: 'tva',         align: 'right' },
-    { header: 'P.U TTC',    dataKey: 'puTtc',       align: 'right' },
-    { header: 'Mt HT',       dataKey: 'totalHt',    align: 'right' },
+    { header: 'Qté',         dataKey: 'qty',     align: 'right' },
+    { header: 'UN',          dataKey: 'unit',    align: 'center' },
+    { header: 'P.U HT',     dataKey: 'puHt',    align: 'right' },
+    { header: 'Remise',      dataKey: 'remise',  align: 'right' },
+    { header: 'TVA',         dataKey: 'tva',     align: 'right' },
+    { header: 'P.U TTC',    dataKey: 'puTtc',   align: 'right' },
+    { header: 'Mt HT',       dataKey: 'totalHt', align: 'right' },
   ];
 
-  buildTable(doc, columns, [0.9, 3.4, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2],
+  // Only show remise column if any item has a discount
+  const hasRemise = (quotation.items || []).some((i) => Number(i.remiseRate || 0) > 0);
+  const usedCols  = hasRemise ? columns : columns.filter((c) => c.dataKey !== 'remise');
+  const flexBase  = hasRemise
+    ? [0.9, 3.2, 0.65, 0.55, 1.0, 0.75, 0.65, 1.0, 1.1]
+    : [0.9, 3.7, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2];
+
+  drawTable(pm, usedCols, flexBase,
     (quotation.items || []).map((item) => ({
-      code:        formatArticleCode(item.articleCode),
+      code:        fmt.code(item.articleCode),
       designation: item.designation,
-      qty:         Number(item.quantity).toLocaleString('fr-FR'),
+      qty:         fmt.qty(item.quantity),
       unit:        item.unit,
       puHt:        money(item.unitPriceHt),
-      tva:         `${Number(item.tvaRate).toFixed(0)}%`,
+      remise:      hasRemise ? fmt.pct(item.remiseRate) : undefined,
+      tva:         fmt.pct(item.tvaRate),
       puTtc:       money(unitPriceTtc(item.unitPriceHt, item.tvaRate)),
       totalHt:     money(item.totalHt),
-    })), y + 4);
-
-  y = doc.lastAutoTable.finalY + 8;
+    })),
+  );
+  syncPages(pm);
 
   const totalRemise = (quotation.items || []).reduce(
     (s, i) => s + Number(i.unitPriceHt) * Number(i.quantity) * (Number(i.remiseRate || 0) / 100), 0);
 
-  y = drawTotalsBox(doc, [
+  const totalRows = [
     ['Total brut HT', `${money(Number(quotation.totalHt) + totalRemise)} TND`],
-    ['Total remise',  `- ${money(totalRemise)} TND`],
+    ...(totalRemise ? [['Total remise', `- ${money(totalRemise)} TND`]] : []),
     ['Total HT',      `${money(quotation.totalHt)} TND`],
     ['Total TVA',     `${money(quotation.totalTva)} TND`],
     ['Timbre fiscal', `${money(quotation.stampDuty)} TND`],
     ['Net à payer',   `${money(quotation.netToPay)} TND`],
-  ], y);
-
-  const pageW = PAGE_W;
-  y = ensureSpace(doc, y, 50);
-
-  doc.setTextColor(INK);
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8);
-  doc.text(`Arrêté le présent devis à la somme de : ${amountInFrench(quotation.netToPay)}.`,
-    MARGIN, y + 4, { maxWidth: pageW - 2 * MARGIN });
-
-  if (quotation.notes) {
-    doc.setTextColor(MUTED);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(`Notes : ${quotation.notes}`, MARGIN, y + 14, { maxWidth: pageW - 2 * MARGIN });
-  }
-
-  y = ensureSpace(doc, y + 20, 20);
-  doc.setTextColor(MUTED);
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(6.5);
-  doc.text("Devis valable 30 jours à compter de sa date d'émission.",
-    MARGIN, doc.internal.pageSize.getHeight() - 62, { maxWidth: pageW - 2 * MARGIN });
+  ];
+  drawTotalsBox(pm, totalRows);
+  drawAmountWords(pm, quotation.netToPay, 'Arrêté le présent devis à la somme de :');
+  drawNotes(pm, quotation.notes);
+  drawValidity(pm, "Devis valable 30 jours à compter de sa date d'émission.");
 
   drawFooter(doc);
   return doc;
@@ -383,69 +546,64 @@ export const generateQuotationPdf = (quotation) => {
 // ─── BON DE LIVRAISON ────────────────────────────────────────────────────────
 export const generateDeliveryPdf = (delivery) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  drawHeader(doc, {
+    title:   'BON DE LIVRAISON',
+    number:  delivery.deliveryNumber,
+    dateStr: fmt.date(delivery.createdAt),
+  });
 
-  let y = drawHeader(doc, { title: 'BON DE LIVRAISON', number: delivery.deliveryNumber, dateStr: date(delivery.createdAt) });
-  y = drawCustomerBlock(doc, delivery, y + 4);
+  const pm = new PageManager(doc, 'BON DE LIVRAISON', delivery.deliveryNumber);
+  pm.y += 4;
+  drawCustomerBlock(pm, delivery);
 
   const columns = [
     { header: 'Code',        dataKey: 'code' },
     { header: 'Désignation', dataKey: 'designation' },
     { header: 'Qté',         dataKey: 'qty',  align: 'right' },
-    { header: 'UN',          dataKey: 'unit',  align: 'center' },
+    { header: 'UN',          dataKey: 'unit', align: 'center' },
   ];
 
-  buildTable(doc, columns, [1.0, 4.5, 0.8, 0.7],
+  drawTable(pm, columns, [1.0, 4.8, 0.8, 0.65],
     (delivery.items || []).map((item) => ({
-      code:        formatArticleCode(item.articleCode),
+      code:        fmt.code(item.articleCode),
       designation: item.designation,
-      qty:         Number(item.quantity).toLocaleString('fr-FR'),
+      qty:         fmt.qty(item.quantity),
       unit:        item.unit,
-    })), y + 4);
+    })),
+  );
+  syncPages(pm);
 
-  y = doc.lastAutoTable.finalY + 8;
-
-  const quotationItems = delivery.quotation?.items || [];
-  const enrichedItems  = (delivery.items || []).map((dItem) => {
-    const qItem = quotationItems.find((q) => q.articleCode === dItem.articleCode) || {};
+  // Compute totals from linked quotation items
+  const qItems = delivery.quotation?.items || [];
+  const enriched = (delivery.items || []).map((dItem) => {
+    const q = qItems.find((qi) => qi.articleCode === dItem.articleCode) || {};
+    const ht = Number(q.unitPriceHt || 0) * dItem.quantity * (1 - Number(q.remiseRate || 0) / 100);
     return {
-      unitPriceHt: Number(qItem.unitPriceHt || 0),
-      remiseRate:  Number(qItem.remiseRate   || 0),
-      tvaRate:     Number(qItem.tvaRate      ?? 19),
+      unitPriceHt: Number(q.unitPriceHt || 0),
+      remiseRate:  Number(q.remiseRate   || 0),
+      tvaRate:     Number(q.tvaRate      ?? 19),
       quantity:    dItem.quantity,
-      totalHt:     Number(qItem.unitPriceHt || 0) * dItem.quantity * (1 - Number(qItem.remiseRate || 0) / 100),
+      totalHt:     ht,
     };
   });
 
-  const totalHt     = enrichedItems.reduce((s, i) => s + i.totalHt, 0);
-  const totalTva    = enrichedItems.reduce((s, i) => s + i.totalHt * (i.tvaRate / 100), 0);
-  const totalRemise = enrichedItems.reduce((s, i) => s + i.unitPriceHt * i.quantity * (i.remiseRate / 100), 0);
+  const totalHt     = enriched.reduce((s, i) => s + i.totalHt, 0);
+  const totalTva    = enriched.reduce((s, i) => s + i.totalHt * (i.tvaRate / 100), 0);
+  const totalRemise = enriched.reduce((s, i) => s + i.unitPriceHt * i.quantity * (i.remiseRate / 100), 0);
   const stampDuty   = Number(delivery.quotation?.stampDuty ?? 1);
   const netToPay    = totalHt + totalTva + stampDuty;
 
-  const pageW = PAGE_W;
-  y = drawTotalsBox(doc, [
+  const totalRows = [
     ['Total brut HT', `${money(totalHt + totalRemise)} TND`],
-    ['Total remise',  `- ${money(totalRemise)} TND`],
+    ...(totalRemise ? [['Total remise', `- ${money(totalRemise)} TND`]] : []),
     ['Total HT',      `${money(totalHt)} TND`],
     ['Total TVA',     `${money(totalTva)} TND`],
     ['Timbre fiscal', `${money(stampDuty)} TND`],
     ['Net à payer',   `${money(netToPay)} TND`],
-  ], y);
-
-  y = ensureSpace(doc, y, 30);
-
-  doc.setTextColor(INK);
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8);
-  doc.text(`Arrêté le présent bon à la somme de : ${amountInFrench(netToPay)}.`,
-    MARGIN, y + 4, { maxWidth: pageW - 2 * MARGIN });
-
-  if (delivery.notes) {
-    doc.setTextColor(MUTED);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(`Notes : ${delivery.notes}`, MARGIN, y + 14, { maxWidth: pageW - 2 * MARGIN });
-  }
+  ];
+  drawTotalsBox(pm, totalRows);
+  drawAmountWords(pm, netToPay, 'Arrêté le présent bon à la somme de :');
+  drawNotes(pm, delivery.notes);
 
   drawFooter(doc);
   return doc;
@@ -454,67 +612,62 @@ export const generateDeliveryPdf = (delivery) => {
 // ─── FACTURE ─────────────────────────────────────────────────────────────────
 export const generateInvoicePdf = (invoice) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  drawHeader(doc, {
+    title:   'FACTURE',
+    number:  invoice.invoiceNumber,
+    dateStr: fmt.date(invoice.createdAt),
+  });
 
-  let y = drawHeader(doc, { title: 'FACTURE', number: invoice.invoiceNumber, dateStr: date(invoice.createdAt) });
-  y = drawCustomerBlock(doc, invoice, y + 4);
+  const pm = new PageManager(doc, 'FACTURE', invoice.invoiceNumber);
+  pm.y += 4;
+  drawCustomerBlock(pm, invoice);
 
-  const columns = [
+  const hasRemise = (invoice.items || []).some((i) => Number(i.remiseRate || 0) > 0);
+  const columns   = [
     { header: 'Code',        dataKey: 'code' },
     { header: 'Désignation', dataKey: 'designation' },
     { header: 'Qté',         dataKey: 'qty',     align: 'right' },
-    { header: 'UN',          dataKey: 'unit',     align: 'center' },
-    { header: 'P.U HT',     dataKey: 'puHt',     align: 'right' },
-    { header: 'TVA',         dataKey: 'tva',      align: 'right' },
-    { header: 'P.U TTC',    dataKey: 'puTtc',    align: 'right' },
+    { header: 'UN',          dataKey: 'unit',    align: 'center' },
+    { header: 'P.U HT',     dataKey: 'puHt',    align: 'right' },
+    { header: 'Remise',      dataKey: 'remise',  align: 'right' },
+    { header: 'TVA',         dataKey: 'tva',     align: 'right' },
+    { header: 'P.U TTC',    dataKey: 'puTtc',   align: 'right' },
     { header: 'Mt HT',       dataKey: 'totalHt', align: 'right' },
   ];
+  const usedCols = hasRemise ? columns : columns.filter((c) => c.dataKey !== 'remise');
+  const flexBase = hasRemise
+    ? [0.9, 3.2, 0.65, 0.55, 1.0, 0.75, 0.65, 1.0, 1.1]
+    : [0.9, 3.7, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2];
 
-  buildTable(doc, columns, [0.9, 3.4, 0.7, 0.6, 1.1, 0.7, 1.1, 1.2],
+  drawTable(pm, usedCols, flexBase,
     (invoice.items || []).map((item) => ({
-      code:        formatArticleCode(item.articleCode),
+      code:        fmt.code(item.articleCode),
       designation: item.designation,
-      qty:         Number(item.quantity).toLocaleString('fr-FR'),
+      qty:         fmt.qty(item.quantity),
       unit:        item.unit,
       puHt:        money(item.unitPriceHt),
-      tva:         `${Number(item.tvaRate ?? 19).toFixed(0)}%`,
+      remise:      hasRemise ? fmt.pct(item.remiseRate) : undefined,
+      tva:         fmt.pct(item.tvaRate ?? 19),
       puTtc:       money(item.unitPriceTtc || unitPriceTtc(item.unitPriceHt, item.tvaRate)),
       totalHt:     money(item.totalHt),
-    })), y + 4);
-
-  y = doc.lastAutoTable.finalY + 8;
+    })),
+  );
+  syncPages(pm);
 
   const totalRemise = (invoice.items || []).reduce(
     (s, i) => s + Number(i.unitPriceHt) * Number(i.quantity) * (Number(i.remiseRate || 0) / 100), 0);
 
-  const pageW = PAGE_W;
-  y = drawTotalsBox(doc, [
+  const totalRows = [
     ['Total brut HT', `${money(Number(invoice.totalHt) + totalRemise)} TND`],
-    ['Total remise',  `- ${money(totalRemise)} TND`],
+    ...(totalRemise ? [['Total remise', `- ${money(totalRemise)} TND`]] : []),
     ['Total HT',      `${money(invoice.totalHt)} TND`],
     ['Total TVA',     `${money(invoice.totalTva)} TND`],
     ['Timbre fiscal', `${money(invoice.stampDuty)} TND`],
     ['NET À PAYER',   `${money(invoice.netToPay)} TND`],
-  ], y);
-
-  y = ensureSpace(doc, y, 40);
-
-  doc.setTextColor(INK);
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8);
-  doc.text(`Arrêtée la présente facture à la somme de : ${amountInFrench(invoice.netToPay)}.`,
-    MARGIN, y + 4, { maxWidth: pageW - 2 * MARGIN });
-
-  if (invoice.notes) {
-    doc.setTextColor(MUTED);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(`Notes : ${invoice.notes}`, MARGIN, y + 14, { maxWidth: pageW - 2 * MARGIN });
-  }
-  if (invoice.mfNumber) {
-    doc.setTextColor(MUTED);
-    doc.setFontSize(7);
-    doc.text(`MF client : ${invoice.mfNumber}`, MARGIN, y + 22, { maxWidth: pageW - 2 * MARGIN });
-  }
+  ];
+  drawTotalsBox(pm, totalRows);
+  drawAmountWords(pm, invoice.netToPay, 'Arrêtée la présente facture à la somme de :');
+  drawNotes(pm, invoice.notes);
 
   drawFooter(doc);
   return doc;
