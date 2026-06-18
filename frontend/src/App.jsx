@@ -15,6 +15,7 @@ import {
   FiPlus,
   FiRefreshCw,
   FiSearch,
+  FiShare2,
   FiShoppingCart,
   FiTag,
   FiTruck,
@@ -24,6 +25,26 @@ import {
 import api from './api/axios.js';
 import { generateQuotationPdf, generateDeliveryPdf, generateInvoicePdf } from './utils/commercialPdf.js';
 import './App.css';
+
+const sharePdf = async (generator, data, filename) => {
+  const doc = generator(data);
+  const blob = doc.output('blob');
+  const file = new File([blob], filename, { type: 'application/pdf' });
+
+  if (navigator.share && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: filename });
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        const url = `https://wa.me/?text=${encodeURIComponent(`Voici votre document : ${filename}\n\n`)}`;
+        window.open(url, '_blank');
+      }
+    }
+  } else {
+    const url = `https://wa.me/?text=${encodeURIComponent(`Voici votre document : ${filename}\n\n`)}`;
+    window.open(url, '_blank');
+  }
+};
 
 const navItems = [
   ['/', 'Tableau de bord', FiGrid],
@@ -1550,6 +1571,7 @@ function Quotations() {
           <div className="row-actions">
             <Autocomplete options={Object.entries(quotationStatusLabels).map(([value, label]) => ({ value, label }))} getOptionLabel={(opt) => opt.label} getOptionValue={(opt) => opt.value} value={row.status} onChange={(v) => updateStatus(row, v)} />
             <button className="btn btn-sm btn-outline-dark" onClick={() => generateQuotationPdf(row).save(`${row.quotationNumber}.pdf`)}><FiDownload /></button>
+            <button className="btn btn-sm btn-outline-success" onClick={() => sharePdf(generateQuotationPdf, row, `${row.quotationNumber}.pdf`)}><FiShare2 /></button>
             <button className="btn btn-sm btn-dark" onClick={() => generateDelivery(row)} disabled={Boolean(row.deliveryNote)}>BL</button>
             <button className="btn btn-sm btn-outline-primary" onClick={() => startEdit(row)}><FiEdit2 /></button>
             <button className="btn btn-sm btn-outline-danger" onClick={() => remove(row.id)}><FiX /></button>
@@ -1617,6 +1639,7 @@ function DeliveryNotes() {
               <button className="btn btn-sm btn-success" onClick={() => acceptDelivery(row)}><FiCheckCircle /></button>
             )}
             <button className="btn btn-sm btn-outline-dark" onClick={() => generateDeliveryPdf(row).save(`${row.deliveryNumber}.pdf`)}><FiDownload /></button>
+            <button className="btn btn-sm btn-outline-success" onClick={() => sharePdf(generateDeliveryPdf, row, `${row.deliveryNumber}.pdf`)}><FiShare2 /></button>
             <button className="btn btn-sm btn-dark" onClick={() => generateInvoice(row)} disabled={row.status !== 'ACCEPTED' || Boolean(row.invoice)}>Facture</button>
             {/* Suppression uniquement si non accepté */}
             {row.status !== 'ACCEPTED' && (
@@ -1666,6 +1689,7 @@ function Invoices() {
           <div className="row-actions">
             <Autocomplete options={Object.entries(paymentStatusLabels).map(([value, label]) => ({ value, label }))} getOptionLabel={(opt) => opt.label} getOptionValue={(opt) => opt.value} value={row.paymentStatus} onChange={(v) => updatePayment(row, v)} />
             <button className="btn btn-sm btn-outline-dark" onClick={() => generateInvoicePdf(row).save(`${row.invoiceNumber}.pdf`)}><FiDownload /></button>
+            <button className="btn btn-sm btn-outline-success" onClick={() => sharePdf(generateInvoicePdf, row, `${row.invoiceNumber}.pdf`)}><FiShare2 /></button>
             <button className="btn btn-sm btn-outline-danger" onClick={() => remove(row.id)}><FiX /></button>
           </div>
         )}
